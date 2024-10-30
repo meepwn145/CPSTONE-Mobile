@@ -1,0 +1,39 @@
+{
+    "project_info": {
+      "project_number": "363637535625",
+      "project_id": "spotwise-e1514",
+      "storage_bucket": "spotwise-e1514.appspot.com"
+    },
+    "client": [
+      {
+        "client_info": {
+          "mobilesdk_app_id": "1:363637535625:android:b81dacf43fdabec85de758",
+          "android_client_info": {
+            "package_name": "com.ciedner.users"
+          }
+        },
+        "oauth_client": [
+          {
+            "client_id": "363637535625-pmm30dm4qfq9lh7ao8upkaa3tokbqtmg.apps.googleusercontent.com",
+            "client_type": 3
+          }
+        ],
+        "api_key": [
+          {
+            "current_key": "AIzaSyDZoYMR342pR30fRi-yr8m6dmIBZXBmrNc"
+          }
+        ],
+        "services": {
+          "appinvite_service": {
+            "other_platform_oauth_client": [
+              {
+                "client_id": "363637535625-o17ucuvniofaujt6faev07u1s4sjg9p1.apps.googleusercontent.com",
+                "client_type": 3
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "configuration_version": "1"
+  }

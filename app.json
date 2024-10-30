@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "users",
+    "slug": "users",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyAlWELpYZIW3WfRx4JI7kQl5r6ejwcxS1Y"
+        }
+      },
+      "package": "com.ciedner.users",
+      "googleServicesFile": "./google-services.json"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "36db4fe9-ff64-4af5-9c70-15d0cbbca260"
+      }
+    }
+  }
+}
