@@ -63,9 +63,7 @@ export default function DetailsScreen({ route }) {
     return (
         <View style={styles.container}>
             <Image source={{ uri: 'https://i.imgur.com/WwPGlNh.png' }} style={styles.backgroundImage} />
-            <Image source={{ uri: 'https://i.imgur.com/Tap1nZy.png' }} style={[styles.backgroundImage, { borderTopLeftRadius: 50, marginTop: 70, borderTopRightRadius: 50 }]} />
-            <Text style={styles.titleText}>Details</Text>
-
+            <Image source={{ uri: 'https://i.imgur.com/Tap1nZy.png' }} style={[styles.backgroundImage, { borderTopLeftRadius: 50, marginTop: 25, borderTopRightRadius: 50 }]} />
             <Card containerStyle={styles.cardContainer}>
                 <View>
                     <Text style={styles.headerName}>{item.managementName}</Text>
@@ -126,11 +124,15 @@ const styles = StyleSheet.create({
     },
     image: {
         marginTop: 10,
-        marginLeft: 75,
+        marginLeft: 55,
         width: 200,
         height: 200,
         resizeMode: "cover",
         marginBottom: 10,
+        borderTopLeftRadius: 25,
+        borderTopRightRadius: 25,
+        borderBottomLeftRadius: 25,
+        borderBottomRightRadius: 25,
     },
     button: {
         backgroundColor: "#39e75f",
@@ -156,7 +158,7 @@ const styles = StyleSheet.create({
         alignSelf: "center",
     },
     cardContainer: {
-        marginTop: "4%",
+        marginTop: "12%",
         borderWidth: 1,
         borderColor: "#FFD700",
         borderTopLeftRadius: 40,

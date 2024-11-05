@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import UserContext from './UserContext';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';  // Import Firebase auth functions
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from "./config/firebase";
 
 function UserProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -23,31 +25,40 @@ function UserProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    // Subscribe to Firebase auth state changes
     const auth = getAuth();
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // User is signed in, update the user state and AsyncStorage
-        const userData = {
-          email: firebaseUser.email,
-          carPlateNumber: firebaseUser.carPlateNumber // Ensure these properties exist or are handled if not
-        };
-        setUser(userData);
-        AsyncStorage.setItem('user', JSON.stringify(userData)).catch(e => {
-          console.log("Failed to save user to AsyncStorage:", e);
-        });
+        console.log("Firebase Auth User ID:", firebaseUser.uid); // Log the user ID from Firebase Auth
+        const userDocRef = doc(db, "user", firebaseUser.uid); // Assuming UID is the key
+        try {
+          const docSnap = await getDoc(userDocRef);
+          if (docSnap.exists()) {
+            console.log("Document exists, data:", docSnap.data()); // Log the data fetched
+            const extendedUserData = docSnap.data();
+            const userData = {
+              email: firebaseUser.email,
+              carPlateNumber: extendedUserData.carPlateNumber,
+              
+            };
+            setUser(userData);
+            AsyncStorage.setItem('user', JSON.stringify(userData)).catch(e => {
+              console.log("Failed to save user to AsyncStorage:", e);
+            });
+          } else {
+            console.log("No document with ID:", firebaseUser.uid); // Explicitly log when no document is found
+          }
+        } catch (error) {
+          console.error("Error fetching user data from Firestore:", error);
+        }
       } else {
-        // User is signed out
+        console.log("No user logged in");
         setUser(null);
-        AsyncStorage.removeItem('user').catch(e => {
-          console.log("Failed to remove user from AsyncStorage:", e);
-        });
       }
     });
-
-    // Clean up the subscription
+  
     return () => unsubscribe();
   }, []);
+  
 
   useEffect(() => {
     // Update AsyncStorage whenever the user state changes

@@ -1,19 +1,44 @@
 import React, { useState, useEffect, useContext } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Alert, ScrollView, Image, Button } from "react-native";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import {
+	View,
+	Text,
+	TouchableOpacity,
+	StyleSheet,
+	Alert,
+	ScrollView,
+	Image,
+	Button,
+} from "react-native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { db } from "./config/firebase";
-import { collection, query, where, onSnapshot, addDoc, deleteDoc, getDocs, updateDoc, setDoc, doc, getDoc } from "firebase/firestore";
+import {
+	collection,
+	query,
+	where,
+	onSnapshot,
+	addDoc,
+	deleteDoc,
+	getDocs,
+	updateDoc,
+	setDoc,
+	doc,
+	getDoc,
+} from "firebase/firestore";
 import Swiper from "react-native-swiper";
 import UserContext from "./UserContext";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { LocationStore } from "./store";
+import { LocationStore, ReservationStore} from "./store";
 import { useStoreState } from "pullstate";
-import RNPickerSelect from 'react-native-picker-select';
+import RNPickerSelect from "react-native-picker-select";
+import * as ImagePicker from 'expo-image-picker';
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { v4 as uuidv4 } from 'uuid'; // If using UUID
 
 const SLOT_PRICE = 30;
 
 export default function ReservationScreen({ route }) {
+    const [selectedImageUri, setSelectedImageUri] = useState(null);
     const { item } = route.params;
     const navigation = useNavigation();
     const { user } = useContext(UserContext);
@@ -23,17 +48,19 @@ export default function ReservationScreen({ route }) {
     const [reservedSlots, setReservedSlots] = useState([]);
     const [selectedSlot, setSelectedSlot] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [reservationStatus, setReservationStatus] = useState("");
     const [isSlotReserved, setIsSlotReserved] = useState(false);
     const [reservations, setReservations] = useState([]);
     const location = useStoreState(LocationStore);
     const [selectedFloor, setSelectedFloor] = useState(null);
-    const [reservationStatus, setReservationStatus] = useState('');
     const [reservationManagement, setReservationManagement] = useState('');
     const [managementPrice, setManagementPrice] = useState(0);
     const [alertShown, setAlertShown] = useState(false); 
     const [fee, setFee] = useState('');
+	const [reservationId, setReservationId] = useState("");
+    const reservationDetails = useStoreState(ReservationStore);
     const [successfullyReservedSlots, setSuccessfullyReservedSlots] = useState([]);
-
+    
     useEffect(() => {
         const reservationsRef = collection(db, "reservations");
         const unsubscribe = onSnapshot(reservationsRef, (snapshot) => {
@@ -49,6 +76,48 @@ export default function ReservationScreen({ route }) {
         };
     }, []);
 
+    const uploadImageToStorage = async (localUri, userEmail, slotId) => {
+        const fileName = `image_${slotId}_${new Date().toISOString()}`; // Name file based on slotId and timestamp
+        const storage = getStorage();
+        const fileRef = storageRef(storage, `images/${userEmail}/${fileName}`);
+        const response = await fetch(localUri);
+        const blob = await response.blob();
+    
+        try {
+            await uploadBytes(fileRef, blob);
+            const downloadURL = await getDownloadURL(fileRef);
+            console.log("Image uploaded and URL received:", downloadURL);
+            return downloadURL;
+        } catch (error) {
+            console.error("Error uploading image to Firebase Storage:", error);
+            throw new Error("Failed to upload image.");
+        }
+    };
+	useEffect(() => {
+		const loadReservedSlots = async () => {
+			try {
+				const storedReservedSlots = await AsyncStorage.getItem("reservedSlots");
+				if (storedReservedSlots) {
+					setReservedSlots(JSON.parse(storedReservedSlots));
+				}
+			} catch (error) {
+				console.error("Error loading reserved slots from AsyncStorage:", error);
+			}
+		};
+		loadReservedSlots();
+	}, []);
+    useEffect(() => {
+		const saveReservedSlots = async () => {
+			try {
+				await AsyncStorage.setItem("reservedSlots", JSON.stringify(reservedSlots));
+			} catch (error) {
+				console.error("Error saving reserved slots to AsyncStorage:", error);
+			}
+		};
+		console.log("reservedSlots", reservedSlots);
+		saveReservedSlots();
+	}, [reservedSlots]);
+    
     const USER_RESERVED_SLOTS_KEY = `reservedSlots_${user.email}`;
 
     useEffect(() => {
@@ -325,84 +394,204 @@ export default function ReservationScreen({ route }) {
             unsubscribeRes();
         };
     }, [db, item.managementName]);
+        
+    function generateId() {
+		const length = 20;
+		const characters = "abcdefghijklmnopqrstuvwxyz0123456789";
+		let result = "";
+		for (let i = 0; i < length; i++) {
+			// Randomly select a character from the characters string
+			const char = characters.charAt(Math.floor(Math.random() * characters.length));
+			// Randomly decide whether to capitalize the character
+			const capitalize = Math.random() < 0.5;
+			result += capitalize ? char.toUpperCase() : char;
+		}
+		return result;
+	}
+   
+    useEffect(() => {
+		console.log("reservvation", reservationDetails);
+		if (reservationDetails.reservationId !== "") {
+			const q = query(
+				collection(db, "resStatus"),
+				where("reservationId", "==", reservationDetails.reservationId)
+			);
+			const unsubscribe = onSnapshot(q, (querySnapshot) => {
+				if (!querySnapshot.empty) {
+					querySnapshot.forEach((doc) => {
+						const data = doc.data();
+						if (data.resStatus === "Declined") {
+							setReservedSlots((prev) =>
+								prev.filter((slot) => slot.slotNumber !== data.slotId + 1)
+							);
+							setSuccessfullyReservedSlots((prev) =>
+								prev.filter((slot) => slot !== data.slotId + 1)
+							);
+							setSelectedSlot(null);
+							ReservationStore.update((s) => {
+								s.reservationId = "";
+								s.status = "Inactive";
+								s.managementName = "";
+								s.parkingPay = "";
+							});
+							Alert.alert("Declined", "Your reservation request has been declined.", [
+								{ text: "OK", style: "default" },
+							]);
+						} else if (data.resStatus === "Accepted") {
+							ReservationStore.update((s) => {
+								s.status = "Active";
+							});
+						}
+					});
+				}
+			});
+			return () => unsubscribe();
+		}
+	}, [reservationDetails.reservationId]);
+	// If slot already exited
+	useEffect(() => {
+		if (reservationDetails.status === "Active") {
+			const q = query(
+				collection(db, "slot", item.managementName, "slotData"),
+				where("reservationId", "==", reservationDetails.reservationId)
+			);
+			const unsubscribe = onSnapshot(q, (querySnapshot) => {
+				if (querySnapshot.empty) {
+					// Kamo nay edit unsa ibutang dapat sa reserved slots kung ma exit na ang slot
+					setReservedSlots([]);
+					setSuccessfullyReservedSlots([]);
+					setSelectedSlot(null);
+					ReservationStore.update((s) => {
+						s.reservationId = "";
+						s.status = "Inactive";
+						s.managementName = "";
+						s.parkingPay = "";
+					});
+				}
+			});
+			return () => unsubscribe();
+		}
+	}, [reservationDetails.status]);
 
     const handleReservation = async () => {
-        // Prevent multiple reservations
         if (reservedSlots.length > 0) {
             Alert.alert("Reservation Limit", "You can only reserve one slot at a time.", [
                 { text: "OK", style: "default" },
             ]);
             return;
         }
-
+    
         if (selectedSlot !== null) {
             Alert.alert(
-                'Confirm Reservation',
-                `Are you sure you want to reserve Slot ${selectedSlot}?`,
+                `This action is non - refundable!`,
+                `You can send your payment via Gcash at ${item.contact} and upload your proof of payment to secure your spot!`,
                 [
+                    { text: 'No', style: 'cancel' },
                     {
-                        text: 'Cancel',
-                        style: 'cancel',
-                    },
-                    {
-                        text: 'OK',
+                        text: 'Yes',
                         onPress: async () => {
-                            let floorTitle = "General Parking";
-                            let slotIndex = -1;
-                            slotSets.forEach(set => {
-                                set.slots.forEach((slot, index) => {
-                                    if (slot.slotNumber === selectedSlot) {
-                                        floorTitle = set.title;
-                                        slotIndex = index;
-                                    }
-                                });
-                            });
-                            const reservationData = {
-                                userEmail: email,
-                                carPlateNumber: plateNumber || '',
-                                slotId: slotIndex,
-                                managementName: item.managementName,
-                                timestamp: new Date(),
-                                status: 'Reserved',
-                                currentLocation: location,
-                                floorTitle,
-                            };
-
-                            try {
-                                const reservationsRef = collection(db, 'reservations');
-                                const uniqueDocName = `slot_${floorTitle}_${slotIndex}`;
-                                await setDoc(doc(reservationsRef, uniqueDocName), reservationData, { merge: true });
-
-                                setReservedSlots([...reservedSlots, { slotNumber: selectedSlot, managementName: item.managementName, parkingPay: item.parkingPay }]);
-                                setSelectedSlot(null);
-
-                                const notificationsRef = collection(db, 'notifications');
-                                const notificationData = {
-                                    type: 'reservation',
-                                    details: `A new reservation for slot ${selectedSlot} has been made`,
-                                    timestamp: new Date(),
-                                    managementName: item.managementName,
-                                    userEmail: email,
-                                };
-                                await addDoc(notificationsRef, notificationData);
-                                Alert.alert('Reservation Successful', `Slot ${selectedSlot} at ${item.managementName} reserved successfully!`);
-                                setSuccessfullyReservedSlots([...successfullyReservedSlots, selectedSlot]);
-                            } catch (error) {
-                                console.error('Error saving reservation:', error);
-                                Alert.alert('Reservation Failed', 'Could not complete your reservation. Please try again.');
+                            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                            if (status !== 'granted') {
+                                alert('Sorry, we need camera roll permissions to make this work!');
+                                return;
                             }
-                        },
+    
+                            const result = await ImagePicker.launchImageLibraryAsync({
+                                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                                allowsEditing: true,
+                                aspect: [4, 3],
+                                quality: 1,
+                            });
+    
+                            if (result.cancelled) {
+                                Alert.alert('Image Upload', 'You need to upload an image to proceed with the reservation.');
+                                return;
+                            }
+    
+                            const uri = result.assets[0].uri;
+                            console.log('Image URI:', uri); // Ensure URI is logged here
+    
+                            Alert.alert(
+                                'Confirm Reservation',
+                                `Upload this image and confirm reservation for Slot ${selectedSlot}?`,
+                                [
+                                    { text: 'Cancel', style: 'cancel' },
+                                    {
+                                        text: 'OK',
+                                        onPress: async () => {
+                                            let floorTitle = "General Parking";
+                                            let slotIndex = -1;
+                                            slotSets.forEach(set => {
+                                                set.slots.forEach((slot, index) => {
+                                                    if (slot.slotNumber === selectedSlot) {
+                                                        floorTitle = set.title;
+                                                        slotIndex = index;
+                                                    }
+                                                });
+                                            });
+                                            try {
+                                                const resId = generateId();
+					                    		setReservationId(resId);
+                                                const imageUrl = await uploadImageToStorage(uri, user.email, selectedSlot);
+                                                const reservationData = {
+                                                    userEmail: email,
+                                                    carPlateNumber: plateNumber || '',
+                                                    slotId: slotIndex,
+                                                    managementName: item.managementName,
+                                                    timestamp: new Date(),
+                                                    status: "Reserved",
+                                                    reservationId: resId,
+                                                    floorTitle,
+                                                    currentLocation: location,
+                                                    imageUri: imageUrl
+                                                };
+    
+                                                const uniqueDocName = `slot_${floorTitle}_${slotIndex}`;
+                                                const reservationsRef = collection(db, 'reservations');
+                                                await setDoc(doc(reservationsRef, uniqueDocName), reservationData, { merge: true });
+                                                setReservedSlots([...reservedSlots, { slotNumber: selectedSlot, managementName: item.managementName, parkingPay: item.parkingPay }]);
+                                                setSelectedSlot(null);
+    
+                                                const notificationsRef = collection(db, 'notifications');
+                                                const notificationData = {
+                                                    type: 'reservation',
+                                                    details: `A new reservation for slot ${selectedSlot} has been made with image proof.`,
+                                                    timestamp: new Date(),
+                                                    managementName: item.managementName,
+                                                    userEmail: email,
+                                                    imageUri: imageUrl
+                                                };
+                                                await addDoc(notificationsRef, notificationData);
+    
+                                                Alert.alert('Reservation Successful', `Slot ${selectedSlot} at ${item.managementName} reserved successfully with image proof!`);
+                                                setSuccessfullyReservedSlots([...successfullyReservedSlots, selectedSlot]);
+                                                ReservationStore.update((s) => {
+                                                    s.reservationId = resId;
+                                                    s.status = "Pending";
+                                                    s.managementName = item.managementName;
+                                                    s.parkingPay = item.parkingPay;
+                                                });
+                                            } catch (error) {
+                                                console.error('Error saving reservation:', error);
+                                                Alert.alert('Reservation Failed', 'Could not complete your reservation. Please try again.');
+                                            }
+                                        },
+                                    },
+                                ],
+                                { cancelable: false }
+                            );
+                        }
                     },
                 ],
                 { cancelable: false }
             );
         } else {
             Alert.alert('Invalid Reservation', 'Please select a valid slot before reserving.', [
-                { text: 'OK', style: 'default' },
+                { text: 'OK', style: "default" },
             ]);
         }
     };
-
+     
     const handleCancelReservation = async () => {
         const reservedSlot = reservedSlots.find(slot => slot.slotNumber === selectedSlot && slot.managementName === item.managementName);
     
@@ -438,7 +627,13 @@ export default function ReservationScreen({ route }) {
                                 setSelectedSlot(null);
                                 Alert.alert("Reservation Canceled", `Reservation for Slot ${selectedSlot} at ${item.managementName} canceled successfully!`);
                                 setSuccessfullyReservedSlots(prev => prev.filter(slot => slot !== selectedSlot));
-    
+                                setReservationId("");
+								ReservationStore.update((s) => {
+									s.reservationId = "";
+									s.status = "Inactive";
+									s.managementName = "";
+									s.parkingPay = "";
+								});
                             } catch (error) {
                                 console.error("Error canceling reservation:", error);
                                 Alert.alert("Cancellation Failed", "Could not cancel your reservation. Please try again.", [{ text: "OK", style: "default" }]);
@@ -460,12 +655,11 @@ export default function ReservationScreen({ route }) {
         <View style={styles.container}>
             <ScrollView contentContainerStyle={styles.scrollContainer}>
                 <Image source={{ uri: 'https://i.imgur.com/WwPGlNh.png' }} style={styles.backgroundImage} />
-                <Image source={{ uri: 'https://i.imgur.com/Tap1nZy.png' }} style={[styles.backgroundImage, { borderTopLeftRadius: 80, marginTop: 100, borderTopRightRadius: 80 }]} />
+                <Image source={{ uri: 'https://i.imgur.com/Tap1nZy.png' }} style={[styles.backgroundImage, { borderTopLeftRadius: 80, marginTop: 50, borderTopRightRadius: 80 }]} />
                 <Image
                     source={require("./images/backgroundWhite.png")}
                     style={[styles.backgroundImage, { borderTopLeftRadius: 130, marginTop: 100 }]}
                 />
-                <Text style={{ alignSelf: "center", fontSize: 40, fontWeight: "bold", color: "white", marginVertical: 10 }}>Reservation</Text>
                 <View style={styles.container}>
                     {isLoading ? (
                         <Text>Loading slots...</Text>

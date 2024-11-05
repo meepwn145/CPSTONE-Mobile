@@ -5,4 +5,11 @@ export const LocationStore = new Store({
     lng: 123.5407,
 });
 
+export const ReservationStore = new Store({
+	status: "Inactive",
+	reservationId: "",
+	managementName: "",
+	parkingPay: "",
+});
+
 registerInDevtools({ LocationStore });
