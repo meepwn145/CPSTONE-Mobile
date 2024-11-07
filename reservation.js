@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { db } from "./config/firebase";
+import { Animated } from "react-native";
 import {
 	collection,
 	query,
@@ -38,21 +39,19 @@ import { v4 as uuidv4 } from 'uuid'; // If using UUID
 const SLOT_PRICE = 30;
 
 export default function ReservationScreen({ route }) {
+    const { item, selectedFloor: initialSelectedFloor, selectedSlot: initialSelectedSlot } = route.params;
     const [selectedImageUri, setSelectedImageUri] = useState(null);
-    const { item } = route.params;
     const navigation = useNavigation();
     const { user } = useContext(UserContext);
     const [email, setEmail] = useState(user?.email || "");
     const [plateNumber, setPlateNumber] = useState(user?.carPlateNumber || "");
     const [slotSets, setSlotSets] = useState([]);
     const [reservedSlots, setReservedSlots] = useState([]);
-    const [selectedSlot, setSelectedSlot] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
     const [reservationStatus, setReservationStatus] = useState("");
     const [isSlotReserved, setIsSlotReserved] = useState(false);
     const [reservations, setReservations] = useState([]);
     const location = useStoreState(LocationStore);
-    const [selectedFloor, setSelectedFloor] = useState(null);
     const [reservationManagement, setReservationManagement] = useState('');
     const [managementPrice, setManagementPrice] = useState(0);
     const [alertShown, setAlertShown] = useState(false); 
@@ -60,7 +59,27 @@ export default function ReservationScreen({ route }) {
 	const [reservationId, setReservationId] = useState("");
     const reservationDetails = useStoreState(ReservationStore);
     const [successfullyReservedSlots, setSuccessfullyReservedSlots] = useState([]);
-    
+    const [selectedFloor, setSelectedFloor] = useState(initialSelectedFloor || null);
+    const [selectedSlot, setSelectedSlot] = useState(initialSelectedSlot || null);
+    const [pulseAnim] = useState(new Animated.Value(1));
+
+    useEffect(() => {
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(pulseAnim, {
+                    toValue: 1.2,
+                    duration: 800,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(pulseAnim, {
+                    toValue: 1,
+                    duration: 800,
+                    useNativeDriver: true,
+                }),
+            ])
+        ).start();
+    }, [pulseAnim]);
+
     useEffect(() => {
         const reservationsRef = collection(db, "reservations");
         const unsubscribe = onSnapshot(reservationsRef, (snapshot) => {
@@ -75,6 +94,16 @@ export default function ReservationScreen({ route }) {
             unsubscribe();
         };
     }, []);
+
+    useEffect(() => {
+        console.log("Received Floor:", initialSelectedFloor);
+        console.log("Received Slot:", initialSelectedSlot);
+    
+        // Set the initial floor and slot selection based on passed parameters
+        if (initialSelectedFloor) setSelectedFloor(initialSelectedFloor);
+        if (initialSelectedSlot) setSelectedSlot(initialSelectedSlot);
+    }, [initialSelectedFloor, initialSelectedSlot]);
+    
 
     const uploadImageToStorage = async (localUri, userEmail, slotId) => {
         const fileName = `image_${slotId}_${new Date().toISOString()}`; // Name file based on slotId and timestamp
@@ -462,10 +491,10 @@ export default function ReservationScreen({ route }) {
 					setSuccessfullyReservedSlots([]);
 					setSelectedSlot(null);
 					ReservationStore.update((s) => {
-						s.reservationId = "";
-						s.status = "Inactive";
-						s.managementName = "";
-						s.parkingPay = "";
+                        s.reservationId = "";
+                        s.status = "Inactive";
+                        s.managementName = "";
+                        s.parkingPay = "";
 					});
 				}
 			});
@@ -544,6 +573,7 @@ export default function ReservationScreen({ route }) {
                                                     floorTitle,
                                                     currentLocation: location,
                                                     imageUri: imageUrl
+
                                                 };
     
                                                 const uniqueDocName = `slot_${floorTitle}_${slotIndex}`;
@@ -570,6 +600,8 @@ export default function ReservationScreen({ route }) {
                                                     s.status = "Pending";
                                                     s.managementName = item.managementName;
                                                     s.parkingPay = item.parkingPay;
+                                                    s.floorTitle = floorTitle;         
+                                                    s.slotNumber = selectedSlot;      
                                                 });
                                             } catch (error) {
                                                 console.error('Error saving reservation:', error);
@@ -595,6 +627,20 @@ export default function ReservationScreen({ route }) {
     const handleCancelReservation = async () => {
         const reservedSlot = reservedSlots.find(slot => slot.slotNumber === selectedSlot && slot.managementName === item.managementName);
     
+        // Check if the slot is occupied
+        const isSlotOccupied = slotSets.some((floor) =>
+            floor.slots.some((slot) => slot.slotNumber === selectedSlot && slot.occupied)
+        );
+    
+        if (isSlotOccupied) {
+            Alert.alert(
+                "Cancellation Not Allowed",
+                "This slot is currently occupied and cannot be canceled.",
+                [{ text: "OK", style: "default" }]
+            );
+            return;
+        }
+    
         if (reservedSlot) {
             Alert.alert(
                 'Cancel Reservation',
@@ -608,32 +654,30 @@ export default function ReservationScreen({ route }) {
                         text: 'OK',
                         onPress: async () => {
                             try {
-                                // Adjust the query to include both slotNumber and managementName
                                 const q = query(
                                     collection(db, "reservations"), 
                                     where("slotId", "==", selectedSlot - 1),
                                     where("managementName", "==", item.managementName),
-                                    where("userEmail", "==", email)  // Assuming userEmail is also a key to identify the reservation
+                                    where("userEmail", "==", email)
                                 );
                                 const querySnapshot = await getDocs(q);
     
                                 querySnapshot.forEach(async (doc) => {
-                                    console.log("Document found: ", doc.id); // Log to check if documents are being fetched
-                                    await deleteDoc(doc.ref);  // Delete each document that matches the query
+                                    console.log("Document found: ", doc.id);
+                                    await deleteDoc(doc.ref);
                                 });
-                                
     
                                 setReservedSlots(prevSlots => prevSlots.filter(slot => slot.slotNumber !== selectedSlot || slot.managementName !== item.managementName));
                                 setSelectedSlot(null);
                                 Alert.alert("Reservation Canceled", `Reservation for Slot ${selectedSlot} at ${item.managementName} canceled successfully!`);
                                 setSuccessfullyReservedSlots(prev => prev.filter(slot => slot !== selectedSlot));
                                 setReservationId("");
-								ReservationStore.update((s) => {
-									s.reservationId = "";
-									s.status = "Inactive";
-									s.managementName = "";
-									s.parkingPay = "";
-								});
+                                ReservationStore.update((s) => {
+                                    s.reservationId = "";
+                                    s.status = "Inactive";
+                                    s.managementName = "";
+                                    s.parkingPay = "";
+                                });
                             } catch (error) {
                                 console.error("Error canceling reservation:", error);
                                 Alert.alert("Cancellation Failed", "Could not cancel your reservation. Please try again.", [{ text: "OK", style: "default" }]);
@@ -650,6 +694,16 @@ export default function ReservationScreen({ route }) {
         }
     };
     
+    
+    console.log("Setting reservation details:", {
+        reservationId: reservationDetails.reservationId,
+        status: reservationDetails.status,
+        managementName: reservationDetails.managementName,
+        parkingPay: reservationDetails.parkingPay,
+        floorTitle: reservationDetails.floorTitle, // Log floor title
+        slotNumber: reservationDetails.slotNumber  // Log slot number
+    });
+
     const totalAmount = reservedSlots.length * SLOT_PRICE;
     return (
         <View style={styles.container}>
@@ -668,21 +722,25 @@ export default function ReservationScreen({ route }) {
                             <View key={index} style={styles.floorContainer}>
                                 <Text style={styles.floorTitle}>{floor.title}</Text>
                                 <View style={styles.slotContainer}>
+                                    
                                     {floor.slots.map((slot) => (
                                         <TouchableOpacity
-                                            key={slot.id}
-                                            style={[
-                                                styles.slotButton,
-                                                slot.occupied && styles.occupiedSlotButton,
-                                                selectedSlot === slot.slotNumber && styles.highlightedSlotButton,
-                                                successfullyReservedSlots.includes(slot.slotNumber) && styles.successfullyReservedSlotButton,
-                                            ]}
-                                            onPress={() => setSelectedSlot(slot.slotNumber)}
-                                            disabled={slot.occupied}
-                                        >
-                                            <Text style={styles.slotButtonText}>{slot.slotNumber}</Text>
-                                        </TouchableOpacity>
-                                    ))}
+                                        key={slot.id}
+                                        style={[
+                                            styles.slotButton,
+                                            slot.occupied && styles.occupiedSlotButton,
+                                            selectedSlot === slot.slotNumber && [
+                                                styles.highlightedSlotButton,
+                                                { transform: [{ scale: pulseAnim }] },
+                                            ],
+                                            successfullyReservedSlots.includes(slot.slotNumber) && styles.successfullyReservedSlotButton,
+                                        ]}
+                                        onPress={() => setSelectedSlot(slot.slotNumber)}
+                                        disabled={slot.occupied}
+                                    >
+                                        <Text style={styles.slotButtonText}>{slot.slotNumber}</Text>
+                                    </TouchableOpacity>
+                                ))}
                                 </View>
                             </View>
                         ))
@@ -729,7 +787,7 @@ export default function ReservationScreen({ route }) {
                     />
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
-                    <View style={{ flex: 1, margin: 5, }}>
+                    <View style={{ flex: 1, margin: 5 }}>
                         <Button
                             title="Reserve Slot"
                             onPress={handleReservation}
@@ -753,8 +811,7 @@ export default function ReservationScreen({ route }) {
                         {reservedSlots.map((reservedSlot, index) => (
                             <View key={index} style={styles.reservedSlotButton}>
                                 <Text style={styles.infoText}>Slot {reservedSlot.slotNumber} at {reservedSlot.managementName}</Text>
-                                <Text style={styles.infoText2}>Total Amount {reservedSlot.parkingPay}.00
-                                </Text>
+                                <Text style={styles.infoText2}>Total Amount {reservedSlot.parkingPay}.00</Text>
                             </View>
                         ))}
                     </View>
@@ -762,8 +819,7 @@ export default function ReservationScreen({ route }) {
             </View>
         </View>
     );
-}
-
+                        };
 const styles = StyleSheet.create({
     reserveSlotButtonText: {
         borderRadius: 100,
@@ -861,8 +917,13 @@ const styles = StyleSheet.create({
     },
     highlightedSlotButton: {
         borderWidth: 3,
-        borderColor: "red",
+        borderColor: "orange",
+        shadowColor: "orange",
+        shadowOpacity: 1,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 0 },
     },
+    
     successfullyReservedSlotButton: {
         borderWidth: 3,
         borderColor: "#FFD700",  // Add this style for successfully reserved slots

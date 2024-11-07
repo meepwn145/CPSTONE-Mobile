@@ -10,6 +10,8 @@ export const ReservationStore = new Store({
 	reservationId: "",
 	managementName: "",
 	parkingPay: "",
+	floorTitle: "",  
+    slotNumber: ""   
 });
 
 registerInDevtools({ LocationStore });

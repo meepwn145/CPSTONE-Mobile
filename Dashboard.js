@@ -123,7 +123,7 @@ export default function Dashboard() {
 								emptyStorage();
 								setIsActive(false);
 								ReservationStore.update((s) => {
-									s.reservationId = "";
+                                    s.reservationId = "";
 									s.status = "Inactive";
 									s.managementName = "";
 									s.parkingPay = "";
@@ -152,11 +152,12 @@ export default function Dashboard() {
 					if (querySnapshot.empty) {
 						emptyStorage();
 						setIsActive(false);
+                        
 						ReservationStore.update((s) => {
-							s.reservationId = "";
-							s.status = "Inactive";
-							s.managementName = "";
-							s.parkingPay = "";
+                            s.reservationId = "";
+                            s.status = "Inactive";
+                            s.managementName = "";
+                            s.parkingPay = "";
 						});
 					}
 				});
@@ -326,9 +327,15 @@ export default function Dashboard() {
 
     const handleReservationStatusClick = () => {
         if (isActive) {
-            navigation.navigate("Map");
+            
+            navigation.navigate("reservation", { 
+                item: reservationDetails,
+                selectedFloor: reservationDetails.floorTitle,     // Pass the floor title
+                selectedSlot: reservationDetails.slotNumber       // Pass the slot number
+            });
         }
     };
+    
     useEffect(() => {
         if (user) {
             console.log('Current User:', user);
@@ -430,9 +437,12 @@ export default function Dashboard() {
                             <View style={styles.additionalCard}>
                                 <Text style={styles.additionalCardTitle}>Explore more parking places</Text>
                                 <Text style={styles.additionalCardContent}>More parking areas are available here!</Text>
+                         
+
                                 <TouchableOpacity style={styles.additionalButton} onPress={() => navigation.navigate("Map")}>
-                                <Text style={styles.additionalButtonText}>Explore</Text>
+                                    <Text style={styles.additionalButtonText}>Explore</Text>
                                 </TouchableOpacity>
+
                             </View>
                             </View>
                         </View>
