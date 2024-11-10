@@ -62,7 +62,7 @@ export default function ReservationScreen({ route }) {
     const [selectedFloor, setSelectedFloor] = useState(initialSelectedFloor || null);
     const [selectedSlot, setSelectedSlot] = useState(initialSelectedSlot || null);
     const [pulseAnim] = useState(new Animated.Value(1));
-
+    
     useEffect(() => {
         Animated.loop(
             Animated.sequence([
@@ -80,6 +80,16 @@ export default function ReservationScreen({ route }) {
         ).start();
     }, [pulseAnim]);
 
+    useFocusEffect(
+        React.useCallback(() => {
+            // Set the default floor when the screen is focused
+            if (!selectedFloor && slotSets.length > 0) {
+                const defaultFloor = slotSets[0].title; // Assumes the first floor in slotSets array
+                setSelectedFloor(defaultFloor);
+            }
+        }, [slotSets])
+    );
+    
     useEffect(() => {
         const reservationsRef = collection(db, "reservations");
         const unsubscribe = onSnapshot(reservationsRef, (snapshot) => {
@@ -148,6 +158,7 @@ export default function ReservationScreen({ route }) {
 	}, [reservedSlots]);
     
     const USER_RESERVED_SLOTS_KEY = `reservedSlots_${user.email}`;
+    
 
     useEffect(() => {
         const loadReservedSlots = async () => {
