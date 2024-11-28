@@ -30,7 +30,7 @@
     "expo-location": "~18.0.2",
     "expo-notifications": "~0.29.8",
     "expo-status-bar": "~2.0.0",
-    "firebase": "^10.11.1",
+    "firebase": "^10.14.1",
     "firebase-admin": "^12.1.0",
     "firebase-functions": "^5.0.1",
     "geofire-common": "^6.0.0",
