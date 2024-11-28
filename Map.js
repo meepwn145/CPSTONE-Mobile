@@ -33,6 +33,7 @@ const Map = ({ route }) => {
     const [selectedParkingPay, setSelectedParkingPay] = useState("");
     const [availableSlots, setAvailableSlots] = useState("");
     const initialDestination = route?.params?.destination || null;
+    const [reservationDuration, setReservationDuration] = useState (0);
     const [state, setState] = useState({
         current: {
             latitude: location.lat,
@@ -91,6 +92,7 @@ const Map = ({ route }) => {
             setSelectedPlaceName(initialDestination.managementName);
             setSelectedParkingPay(initialDestination.parkingPay);
             setAvailableSlots(initialDestination.availableSlots);
+            setReservationDuration(initialDestination.reservationDuration);
             setShowDirections(true);
         }
     }, [initialDestination]);
@@ -131,7 +133,7 @@ const Map = ({ route }) => {
                         const occupiedSlots = slotDataSnapshot.size;
                         const totalSlots = parseInt(establishment.totalSlots);
                         const availableSlots = totalSlots - occupiedSlots;
-    
+                        const reservationDuration = establishment.reservationDuration ;
                         matchingDocs.push({
                             id: doc.id,
                             availableSlots: availableSlots,
@@ -139,6 +141,7 @@ const Map = ({ route }) => {
                             parkingPay: establishment.parkingPay,
                             latitude: lat,
                             longitude: lng,
+                            reservationDuration,
                         });
                     }
                 });
@@ -192,7 +195,7 @@ const Map = ({ route }) => {
         }
     };
 
-    const handleMarkerClick = (coordinates, name, parkingPay, slots) => {
+    const handleMarkerClick = (coordinates, name, parkingPay, slots, reservationDuration) => {
         setState((prevstate) => ({
             ...prevstate,
             destination: coordinates,
@@ -200,6 +203,7 @@ const Map = ({ route }) => {
         setSelectedPlaceName(name);
         setSelectedParkingPay(parkingPay);
         setAvailableSlots(slots);
+        setReservationDuration(reservationDuration);
         setShowDirections(true);
         console.log("Button clicked!", name);
     };
@@ -233,7 +237,8 @@ const Map = ({ route }) => {
                                 { latitude: place.latitude, longitude: place.longitude },
                                 place.managementName,
                                 place.parkingPay,
-                                place.availableSlots
+                                place.availableSlots,
+                                place.reservationDuration
                             )}
                         />
                     ))}
@@ -252,6 +257,7 @@ const Map = ({ route }) => {
             <View style={styles.infoContainer}>
                 <Text style={styles.infoText}>Parking Place: {selectedPlaceName}</Text>
                 <Text style={styles.infoText}>Parking Pay: {selectedParkingPay}</Text>
+                <Text style={styles.infoText}>Reservation Duration: {reservationDuration} minutes</Text>
                 <View style={styles.divider} />
                 <Text style={styles.infoText2}>Available Slots: {availableSlots}</Text>
                 <Button

@@ -38,6 +38,7 @@ export default function Dashboard() {
     const [isSidebarVisible, setSidebarVisible] = useState(false);
     const [recommended, setRecommended] = useState([]);
 	const [reservationConfirmed, setReservationConfirmed] = useState(false); // Track reservation status
+    const [reservationDurataion, setReservationDuration] = useState (0);
 	const reservationDetails = useStoreState(ReservationStore);
 	const [isActive, setIsActive] = useState(
         reservationDetails?.status === "Inactive" ? false : true
