@@ -41,7 +41,7 @@ import {
 } from "firebase/storage";
 import { v4 as uuidv4 } from "uuid"; // If using UUID
 import { auth } from "./config/firebase";
-import { fetchData, fetchReservation } from "./helper/helper";
+import { fetchData, fetchReservation, fetchSlotData } from "./helper/helper";
 
 const SLOT_PRICE = 30;
 
@@ -94,7 +94,19 @@ export default function ReservationScreen({ route }) {
       ])
     ).start();
   }, [pulseAnim]);
-
+  useFocusEffect(
+    React.useCallback(() => {
+      const fetchData = async () => {
+        const slotSnapshot = await getDocs(collection(db, "slot", item.managementName, "slotData"));
+        const slotData = slotSnapshot.docs.map((doc) => doc.data());
+  
+        setSlotSets(processSlotData(slotData));
+      };
+  
+      fetchData();
+    }, [item.managementName])
+  );
+  
   useFocusEffect(
     React.useCallback(() => {
       // Set the default floor when the screen is focused
@@ -104,6 +116,32 @@ export default function ReservationScreen({ route }) {
       }
     }, [slotSets])
   );
+useEffect(() => {
+  const fetchReservations = async () => {
+    if (!auth.currentUser?.email) return;
+
+    const q = query(
+      collection(db, "reservations"),
+      where("userEmail", "==", auth.currentUser.email) // Fetch reservations for the current user
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        const reservationData = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setreservationInformation(reservationData[0]); // Assuming one reservation per user
+      } else {
+        setreservationInformation(null); // No reservations found
+      }
+    });
+
+    return () => unsubscribe();
+  };
+
+  fetchReservations();
+}, [auth.currentUser?.email]);
 
   useEffect(() => {
     const reservationsRef = collection(db, "reservations");
@@ -145,24 +183,58 @@ export default function ReservationScreen({ route }) {
   // Real time user
 
   const [reservationInformation, setreservationInformation] = useState(null);
+  const [slotDetails, setSlotDetails] = useState(null);
   useEffect(() => {
-    // console.log("Hello?");
     const unsubscribe = fetchReservation(
-      {
+        {
+            collectionName: "reservations",
+            conditions: [["userEmail", "==", auth.currentUser.email]],
+        },
+        ({ data, error }) => {
+            if (error) {
+                console.error("Error fetching data:", error);
+                setreservationInformation(null);
+            } else {
+                console.log("Fetched reservation data:", data);
+                setreservationInformation(data ? data[0] : null);
+            }
+        }
+    );
+
+    return () => unsubscribe();
+}, []);
+
+useEffect(() => {
+    if (!auth.currentUser || !auth.currentUser.email) {
+        console.log("No valid user email available for fetching reservations.");
+        return;
+    }
+
+    console.log("Fetching reservations for email:", auth.currentUser.email);
+
+    const params = {
         collectionName: "reservations",
         conditions: [["userEmail", "==", auth.currentUser.email]],
-      },
-      ({ data, error }) => {
+    };
+
+    const unsubscribe = fetchReservation(params, ({ data, error }) => {
         if (error) {
-          console.error("Error fetching data:", error);
-          reservationInformation(null);
-        } else if (data) {
-          setreservationInformation(data[0]);
+            console.error("Error fetching reservation data:", error);
+            setreservationInformation(null);
+        } else if (data && data.length > 0) {
+            console.log("Fetched reservation data:ssss", data);
+            setreservationInformation(data[0]);
+        } else {
+            console.log("No reservations found for the current user.");
+            setreservationInformation(null);
         }
-      }
-    );
-    return () => unsubscribe();
-  }, []);
+    });
+
+    return () => {
+        console.log("Unsubscribing from reservation data updates.");
+        unsubscribe();
+    };
+}, [auth.currentUser?.email]); // Dependency on user's email
 
   useEffect(() => {
     // Set the initial floor and slot selection based on passed parameters
@@ -293,56 +365,176 @@ export default function ReservationScreen({ route }) {
     };
   }, [item.managementName]);
 
-  const processEstablishmentData = (establishmentData) => {
+  useEffect(() => {
+    const slotDataRef = collection(db, "slot", item.managementName, "slotData");
+  
+    const unsubscribe = onSnapshot(slotDataRef, (snapshot) => {
+      const updatedSlotData = new Map();
+  
+      snapshot.forEach((doc) => {
+        const { status } = doc.data();
+        const [prefix, floor, index] = doc.id.split("_");
+        if (prefix === "slot" && floor && index !== undefined) {
+          const combinedId = `${floor}-${index}`;
+          updatedSlotData.set(combinedId, status);
+        }
+      });
+  
+      setSlotSets((currentSlotSets) =>
+        currentSlotSets.map((floor) => ({
+          ...floor,
+          slots: floor.slots.map((slot, index) => {
+            const combinedId = `${floor.title}-${index}`;
+            return {
+              ...slot,
+              occupied: updatedSlotData.get(combinedId) === "Occupied",
+            };
+          }),
+        }))
+      );
+    });
+  
+    return () => unsubscribe();
+  }, [item.managementName]);
+  useEffect(() => {
+    if (reservedSlots.some((slot) => slot.occupied === false)) {
+      setReservedSlots((prev) => prev.filter((slot) => slot.occupied));
+    }
+  }, [slotSets]);
+    
+
+  useEffect(() => {
+    const slotDataRef = collection(db, "slot", item.managementName, "slotData");
+    const resDataRef = collection(db, "res", item.managementName, "resData");
+
+    let fetchedSlotData = new Map();
+    let fetchedResData = new Map();
+
+    const processSlotData = (querySnapshot) => {
+        querySnapshot.forEach((doc) => {
+            const docName = doc.id;
+            const [prefix, floor, index] = docName.split("_");
+            if (prefix === "slot" && floor && index !== undefined) {
+                const combinedId = `${floor}-${index}`;
+                fetchedSlotData.set(combinedId, doc.data().status);
+            }
+        });
+    };
+
+    const processResData = (querySnapshot) => {
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            const status = data.status;
+            const slotId = data.slotId;
+            fetchedResData.set(slotId, status);
+        });
+    };
+
+    const unsubscribeSlot = onSnapshot(slotDataRef, (querySnapshot) => {
+        processSlotData(querySnapshot);
+        updateSlotSets();
+    });
+
+    const unsubscribeRes = onSnapshot(resDataRef, (querySnapshot) => {
+        processResData(querySnapshot);
+        updateSlotSets();
+    });
+
+    // Update slot sets with real-time data
+    const updateSlotSets = () => {
+      setSlotSets((currentSlotSets) =>
+        currentSlotSets.map((floor) => ({
+          ...floor,
+          slots: floor.slots.map((slot, index) => {
+            const combinedId = `${floor.title}-${index}`;
+            const isOccupied =
+              fetchedSlotData.get(combinedId) === "Occupied" ||
+              fetchedResData.get(slot.slotNumber) === "Occupied";
+  
+            return {
+              ...slot,
+              occupied: isOccupied,
+            };
+          }),
+        }))
+      );
+    };
+
+    return () => {
+        unsubscribeSlot();
+        unsubscribeRes();
+    };
+}, [db, item.managementName]);
+
+
+useEffect(() => {
+    const fetchResStatus = async () => {
+        if (user?.name) {
+            const resStatusQuery = query(
+                collection(db, 'resStatus'),
+                where('userName', '==', user.name),
+                where('managementName', '==', item.managementName)
+            );
+            const unsubscribeResStatus = onSnapshot(resStatusQuery, (snapshot) => {
+                snapshot.docChanges().forEach((change) => {
+                    if (change.type === 'added' || change.type === 'modified') {
+                        const resStatusData = change.doc.data();
+                        const message = `Reservation Status for Slot ${resStatusData.slotId + 1} is ${resStatusData.resStatus}`;
+                        setReservationStatus(resStatusData.resStatus);
+                        setReservationManagement(resStatusData.managementName);
+
+                        if (!alertShown) {
+                            Alert.alert('Reservation Status Update', message, [{ text: 'OK', onPress: () => setAlertShown(true) }]);
+                        }
+                    }
+                });
+            });
+
+            return () => {
+                unsubscribeResStatus();
+            };
+        }
+    };
+
+    fetchResStatus();
+}, [user?.name, item.managementName, alertShown]);
+
+const processEstablishmentData = (establishmentData) => {
     let newSlotSets = [];
     let slotCounter = 0;
 
-    if (
-      Array.isArray(establishmentData.floorDetails) &&
-      establishmentData.floorDetails.length > 0
-    ) {
-      establishmentData.floorDetails.forEach((floor) => {
-        const floorSlots = Array.from(
-          { length: parseInt(floor.parkingLots) },
-          (_, i) => ({
-            id: `${floor.floorName}-${i + 1}`,
-            floor: floor.floorName,
-            slotNumber: ++slotCounter,
-            occupied: false,
-          })
-        );
-
-        newSlotSets.push({
-          title: floor.floorName,
-          slots: floorSlots,
-        });
-      });
-    } else if (establishmentData.totalSlots) {
-      newSlotSets = [
-        {
-          title: "General Parking",
-          slots: Array.from(
-            { length: parseInt(establishmentData.totalSlots) },
-            (_, i) => {
-              const slotKey = `slot_General_${i}`;
-              const slotData = reservedSlots.find(
-                (slot) => slot.id === slotKey
-              );
-              return {
-                id: i,
-                floor: "General Parking",
+    if (Array.isArray(establishmentData.floorDetails) && establishmentData.floorDetails.length > 0) {
+        establishmentData.floorDetails.forEach((floor) => {
+            const floorSlots = Array.from({ length: parseInt(floor.parkingLots) }, (_, i) => ({
+                id: `${floor.floorName}-${i + 1}`,
+                floor: floor.floorName,
                 slotNumber: ++slotCounter,
-                occupied: !!slotData,
-              };
-            }
-          ),
-        },
-      ];
+                occupied: false,
+            }));
+
+            newSlotSets.push({
+                title: floor.floorName,
+                slots: floorSlots,
+            });
+        });
+    } else if (establishmentData.totalSlots) {
+        newSlotSets = [{
+            title: 'General Parking',
+            slots: Array.from({ length: parseInt(establishmentData.totalSlots) }, (_, i) => {
+                const slotKey = `slot_General_${i}`;
+                const slotData = reservedSlots.find(slot => slot.id === slotKey);
+                return {
+                    id: i,
+                    floor: 'General Parking',
+                    slotNumber: ++slotCounter,
+                    occupied: !!slotData,
+                };
+            }),
+        }];
     }
 
     return newSlotSets;
-  };
-
+};
   function generateId() {
     const length = 20;
     const characters = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -483,6 +675,7 @@ export default function ReservationScreen({ route }) {
                   imageUri: "",
                   parkingPay: fee,
                   userName: userInformation?.name,
+                  reservationDuration: item.reservationDuration,
                 };
 
                 const uniqueDocName = `slot_${floorTitle}_${slotIndex}`;
@@ -791,22 +984,26 @@ export default function ReservationScreen({ route }) {
             />
           </View>
         </View>
-        {reservationInformation != null && (
-          <View>
-            <Text style={styles.infoTextTitle}>Your Reservation</Text>
-            <View style={styles.divider} />
-
-            <View style={styles.reservedSlotButton}>
-              <Text style={styles.infoText}>
-                Slot {reservationInformation.slotId + 1} at{" "}
-                {reservationInformation.managementName}
-              </Text>
-              <Text style={styles.infoText2}>
-                Total Amount {reservationInformation.parkingPay}.00
-              </Text>
-            </View>
-          </View>
-        )}
+        {reservationInformation ? (
+    <View>
+      <Text style={styles.infoTextTitle}>Your Reservation</Text>
+      <Text style={styles.infoText}>
+        Slot {reservationInformation.slotId + 1} at {reservationInformation.managementName}
+      </Text>
+      <Text style={styles.infoText2}>
+        Total Amount: {reservationInformation.parkingPay}.00
+      </Text>
+    </View>
+  ) : slotDetails ? (
+    <View>
+      <Text style={styles.infoTextTitle}>You are parked at</Text>
+      <Text style={styles.infoText}>
+        Slot {slotDetails.slotId + 1} on {slotDetails.floorTitle}
+      </Text>
+    </View>
+  ) : (
+    <Text style={styles.infoText}>Loading data...</Text>
+  )}
       </View>
     </View>
   );

@@ -72,34 +72,31 @@ export default function Dashboard() {
 
   const fetchData = () => {
     console.log("Listening for real-time data...");
-
+  
     const q = query(
       collection(db, "reservations"),
       where("userEmail", "==", user.email)
     );
-
-    // Real-time listener with onSnapshot
-    const unsubscribe = onSnapshot(
-      q,
-      (querySnapshot) => {
-        if (querySnapshot.empty) {
-          console.log("No reservations found for this user.");
-          return;
-        }
-
-        // Assuming you want the first document (or change this to handle multiple docs)
-        const reservation = querySnapshot.docs[0].data();
-        setreservationInformation(reservation);
-        console.log("Real-time reservation data:", reservation);
-      },
-      (error) => {
-        console.error("Error fetching real-time data:", error);
+  
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      if (querySnapshot.empty) {
+        console.log("No reservations found for this user.");
+        setreservationInformation(null); // Clear reservation info when no document exists
+        return;
       }
-    );
-
-    // Return the unsubscribe function to stop listening when component unmounts
+  
+      // Handle the case for a single reservation document
+      const reservation = querySnapshot.docs[0].data();
+      setreservationInformation(reservation);
+      console.log("Real-time reservation data:", reservation);
+    }, 
+    (error) => {
+      console.error("Error fetching real-time data:", error);
+    });
+  
     return unsubscribe;
   };
+  
 
   console.log("worht fighting");
   console.log(reservationInformation);
@@ -401,16 +398,17 @@ export default function Dashboard() {
   };
 
   const handleReservationStatusClick = () => {
-    console.log("hello");
-    console.log(isActive);
-    // if (isActive) {
-    //   navigation.navigate("reservation", {
-    //     item: reservationDetails,
-    //     selectedFloor: reservationDetails.floorTitle, // Pass the floor title
-    //     selectedSlot: reservationDetails.slotNumber, // Pass the slot number
-    //   });
-    // }
+    if (isActive && reservationDetails) {
+      navigation.navigate("reservation", {
+        item: reservationDetails,
+        selectedFloor: reservationDetails.floorTitle, // Pass the floor title
+        selectedSlot: reservationDetails.slotNumber, // Pass the slot number
+      });
+    } else {
+      Alert.alert("Navigation Error", "No active reservation to navigate.");
+    }
   };
+  
 
   useEffect(() => {
     if (user) {
@@ -508,122 +506,111 @@ export default function Dashboard() {
       <View style={styles.container}>
         <Image style={styles.navbar} />
         <View style={styles.logoContainer}>
-          <Text style={styles.logoText}>Recommended nearby parking spaces</Text>
-          <Text style={styles.logoSubText}>Secure your spots now!</Text>
-        </View>
-        <View style={styles.container}>
-          <View>
-            <FlatList
-              ref={flatListRef}
-              data={recommendedPlaces}
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              keyExtractor={(item, index) => index.toString()}
-              renderItem={renderCarouselItem}
-              onViewableItemsChanged={onViewableItemsChanged}
-              viewabilityConfig={{
-                itemVisiblePercentThreshold: 50,
-              }}
-            />
-          </View>
-          <View style={styles.separatorLine} />
-          <View style={{ maxWidth: 400, marginBottom: 20 }}>
-            <View>
-              {reservationInformation === null && (
-                <View
-                  style={{ justifyContent: "center", alignItems: "center" }}
-                >
-                  <View style={styles.additionalCard}>
-                    <Text style={styles.additionalCardTitle}>
-                      Explore more parking places
-                    </Text>
-                    <Text style={styles.additionalCardContent}>
-                      More parking areas are available here!
-                    </Text>
+        <Text style={styles.logoText}>Recommended nearby parking spaces</Text>
+    <Text style={styles.logoSubText}>Secure your spots now!</Text>
+  </View>
+  <View style={styles.container}>
+    <View>
+      <FlatList
+        ref={flatListRef}
+        data={recommendedPlaces}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        keyExtractor={(item, index) => index.toString()}
+        renderItem={renderCarouselItem}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={{
+          itemVisiblePercentThreshold: 50,
+        }}
+      />
+    </View>
+    <View style={styles.separatorLine} />
+    <View style={{ maxWidth: 400, marginBottom: 20 }}>
+      <View>
+      {!reservationInformation?.status || reservationInformation?.status === "Inactive" ? (
 
-                    <TouchableOpacity
-                      style={styles.additionalButton}
-                      onPress={() => navigation.navigate("Map")}
-                    >
-                      <Text style={styles.additionalButtonText}>Explore</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-            </View>
+        <View style={{ justifyContent: "center", alignItems: "center" }}>
+          <View style={styles.additionalCard}>
+            <Text style={styles.additionalCardTitle}>
+              Explore more parking places
+            </Text>
+            <Text style={styles.additionalCardContent}>
+              More parking areas are available here!
+            </Text>
             <TouchableOpacity
-              style={[
-                styles.reservationStatusContainer,
-                isActive ? styles.active : styles.inactive,
-              ]}
-              onPress={handleReservationStatusClick}
-              disabled={
-                reservationInformation?.status !== "Paid" ? true : false
-              }
+              style={styles.additionalButton}
+              onPress={() => navigation.navigate("Map")}
             >
-              <Text style={styles.reservationStatusText}>
-                Reservation Status: {reservationInformation?.status}
-              </Text>
+              <Text style={styles.additionalButtonText}>Explore</Text>
             </TouchableOpacity>
-            {reservationInformation?.status === "Accepted" && (
-              <TouchableOpacity
-                style={[
-                  styles.reservationStatusContainer,
-                  isActive ? styles.active : styles.inactive,
-                ]}
-                onPress={async () => {
-                  const imagePickere =
-                    await ImagePicker.launchImageLibraryAsync({
-                      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                      allowsEditing: true,
-                      aspect: [4, 3],
-                      quality: 1,
-                    });
-
-                  if (imagePickere.cancelled) {
-                    Alert.alert(
-                      "Image Upload",
-                      "You need to upload an image to proceed with the reservation."
-                    );
-                    return;
-                  }
-
-                  const uri = imagePickere.assets[0].uri;
-                  console.log("Image URI:", uri);
-
-                  const imageUrl = await uploadImageToStorage(
-                    uri,
-                    user.email,
-                    Math.random()
-                  );
-                  console.log(imageUrl);
-                  if (imageUrl !== null) {
-                    const q = query(
-                      collection(db, "reservations"),
-                      where("userEmail", "==", "gg@gmail.com")
-                    );
-                    console.log("zxcz");
-                    const result = await getDocs(q);
-                    console.log("mag himay");
-                    console.log(!result.empty);
-                    if (!result.empty) {
-                      const docRef = result.docs[0].ref;
-
-                      await updateDoc(docRef, {
-                        status: "Paid",
-                        imageUri: imageUrl,
-                      });
-                    }
-                  }
-                }}
-              >
-                <Text style={styles.reservationStatusText}>Upload Photo</Text>
-              </TouchableOpacity>
-            )}
           </View>
         </View>
+  ) : null}
 
+        <TouchableOpacity
+          style={[
+            styles.reservationStatusContainer,
+            isActive ? styles.active : styles.inactive,
+          ]}
+          onPress={handleReservationStatusClick}
+        >
+          <Text style={styles.reservationStatusText}>
+            Reservation Status: {reservationInformation?.status || "Inactive"}
+          </Text>
+        </TouchableOpacity>
+
+        {reservationInformation?.status === "Accepted" && (
+          <TouchableOpacity
+            style={[
+              styles.reservationStatusContainer,
+              isActive ? styles.active : styles.inactive,
+            ]}
+            onPress={async () => {
+              const imagePicker = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [4, 3],
+                quality: 1,
+              });
+
+              if (imagePicker.cancelled) {
+                Alert.alert(
+                  "Image Upload",
+                  "You need to upload an image to proceed with the reservation."
+                );
+                return;
+              }
+
+              const uri = imagePicker.assets[0].uri;
+              const imageUrl = await uploadImageToStorage(
+                uri,
+                user.email,
+                Math.random()
+              );
+              if (imageUrl) {
+                const q = query(
+                  collection(db, "reservations"),
+                  where("userEmail", "==", user.email)
+                );
+                const result = await getDocs(q);
+                if (!result.empty) {
+                  const docRef = result.docs[0].ref;
+                  await updateDoc(docRef, {
+                    status: "Paid",
+                    imageUri: imageUrl,
+                  });
+                }
+              }
+            }}
+          >
+            <Text style={styles.reservationStatusText}>Upload Photo</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  </View>
+</View>
         <View style={styles.tabBarContainer}>
           <View style={[styles.tabBar, { opacity: 0.8 }]}>
             <TouchableOpacity style={styles.tabBarButton} onPress={goToProfile}>
@@ -723,7 +710,6 @@ export default function Dashboard() {
           </TouchableWithoutFeedback>
         </Modal>
       </View>
-    </View>
   );
 }
 
