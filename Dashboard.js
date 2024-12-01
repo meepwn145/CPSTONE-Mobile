@@ -110,7 +110,7 @@ export default function Dashboard() {
     const unsubscribe = fetchData();
     return () => unsubscribe();
   }, []);
-
+  
   const [accepetedReservation, setaccepetedReservation] = useState(null);
   useEffect(() => {
     if (reservationInformation === null && userInformation !== null) {
@@ -202,13 +202,11 @@ export default function Dashboard() {
   useFocusEffect(
     React.useCallback(() => {
       setIsActive(reservationDetails?.status === "Inactive" ? false : true);
-  
-      if (reservationDetails.reservationId) {
+      if (reservationDetails.reservationId !== "") {
         const q = query(
           collection(db, "resStatus"),
           where("reservationId", "==", reservationDetails.reservationId)
         );
-  
         const unsubscribe = onSnapshot(q, (querySnapshot) => {
           if (!querySnapshot.empty) {
             querySnapshot.forEach((doc) => {
@@ -238,36 +236,34 @@ export default function Dashboard() {
             });
           }
         });
-  
         return () => unsubscribe();
       }
     }, [reservationDetails.reservationId, reservationDetails.status])
-  );
-  
+    );
   useFocusEffect(
-    React.useCallback(() => {
-      if (reservationDetails.status === "Active") {
-        const q = query(
-          collection(db, "slot", reservationDetails.managementName, "slotData"),
-          where("reservationId", "==", reservationDetails.reservationId)
-        );
-        const unsubscribe = onSnapshot(q, (querySnapshot) => {
-          if (querySnapshot.empty) {
-            emptyStorage();
-            setIsActive(false);
-
-            ReservationStore.update((s) => {
-              s.reservationId = "";
-              s.status = "Inactive";
-              s.managementName = "";
-              s.parkingPay = "";
-            });
-          }
-        });
-        return () => unsubscribe();
-      }
-    }, [reservationDetails.status])
-  );
+		React.useCallback(() => {
+			if (reservationDetails.status === "Active") {
+				const q = query(
+					collection(db, "slot", reservationDetails.managementName, "slotData"),
+					where("reservationId", "==", reservationDetails.reservationId)
+				);
+				const unsubscribe = onSnapshot(q, (querySnapshot) => {
+					if (querySnapshot.empty) {
+						emptyStorage();
+						setIsActive(false);
+                        
+						ReservationStore.update((s) => {
+                            s.reservationId = "";
+                            s.status = "Inactive";
+                            s.managementName = "";
+                            s.parkingPay = "";
+						});
+					}
+				});
+				return () => unsubscribe();
+			}
+		}, [reservationDetails.status])
+	);
   useEffect(() => {
     const getCurrentLoc = async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
@@ -297,6 +293,7 @@ export default function Dashboard() {
     getCurrentLoc();
   }, []);
 
+  
   useEffect(() => {
     if (reservationConfirmed) {
       setIsActive(true);
@@ -423,23 +420,21 @@ export default function Dashboard() {
   };
 
   const handleReservationStatusClick = () => {
-    if (accepetedReservation) {
-      navigation.navigate("reservation", {
-        item: {
-          floorTitle: userInformation.reservationInformation.floorTitle,
-          managementName: userInformation.reservationInformation.managementName,
-          parkingPay: userInformation.reservationInformation.parkingPay,
-          reservationId: userInformation.reservationInformation.reservationId,
-          slotNumber: userInformation.reservationInformation.slotNumber + 1,
-          status: "Active",
-        },
-        selectedFloor: accepetedReservation.userDetails.floorTitle, // Pass the floor title
-        selectedSlot: accepetedReservation.userDetails.slotId, // Pass the slot number
-      });
-    } else {
+    if (isActive) {
+        
+        navigation.navigate("reservation", { 
+            item: reservationDetails,
+            status: "Active",
+
+            selectedFloor: reservationDetails.floorTitle,     // Pass the floor title
+            selectedSlot: reservationDetails.slotNumber       // Pass the slot number
+        });
+        
+    }
+    else {
       Alert.alert("Navigation Error", "No active reservation to navigate.");
     }
-  };
+};
 
   useEffect(() => {
     if (user) {
@@ -552,7 +547,7 @@ export default function Dashboard() {
           <View style={styles.separatorLine} />
           <View style={{ maxWidth: 400, marginBottom: 20 }}>
             <View>
-              {!reservationInformation?.status ||
+            {!reservationInformation?.status ||
               reservationInformation?.status === "Inactive" ? (
                 <View
                   style={{ justifyContent: "center", alignItems: "center" }}
@@ -574,26 +569,22 @@ export default function Dashboard() {
                 </View>
               ) : null}
 
-              <TouchableOpacity
-                style={[
-                  styles.reservationStatusContainer,
-                  accepetedReservation?.reserveStatus
-                    ? styles.active
-                    : isActive
-                    ? styles.active
-                    : styles.inactive,
-                ]}
-                onPress={handleReservationStatusClick}
-                disabled={
-                  reservationInformation?.status !== undefined ? true : false
-                }
-              >
-                <Text style={styles.reservationStatusText}>
-                  Reservation Status:{" "}
-                  {reservationInformation?.status ||
-                    accepetedReservation?.reserveStatus}
-                </Text>
-              </TouchableOpacity>
+<TouchableOpacity
+  style={[
+    styles.reservationStatusContainer,
+    reservationDetails?.status?.toLowerCase() === "inactive"
+      ? styles.inactive
+      : styles.active,
+  ]}
+  onPress={handleReservationStatusClick}
+  disabled={reservationDetails?.status?.toLowerCase() === "inactive"}
+>
+  <Text style={styles.reservationStatusText}>
+    Reservation Status: {reservationDetails?.status || "Unknown"}
+  </Text>
+</TouchableOpacity>
+
+
 
               {reservationInformation?.status === "Accepted" && (
                 <TouchableOpacity

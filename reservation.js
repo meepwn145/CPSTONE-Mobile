@@ -121,14 +121,14 @@ export default function ReservationScreen({ route }) {
           }));
           setreservationInformation(reservationData[0]); // Assuming one reservation per user
         } else {
-          setreservationInformation(null); // No reservations found
+          setreservationInformation(null);
+          setReservationStatus(""); // Clear the status text
         }
       });
 
       return () => unsubscribe();
     };
 
-    fetchReservations();
   }, [auth.currentUser?.email]);
 
   useEffect(() => {
@@ -567,12 +567,12 @@ export default function ReservationScreen({ route }) {
           setReservedSlots([]);
           setSuccessfullyReservedSlots([]);
           setSelectedSlot(null);
-          // ReservationStore.update((s) => {
-          //   s.reservationId = "";
-          //   s.status = "Inactive";
-          //   s.managementName = "";
-          //   s.parkingPay = "";
-          // });
+           ReservationStore.update((s) => {
+             s.reservationId = "";
+             s.status = "Inactive";
+             s.managementName = "";
+             s.parkingPay = "";
+           });
         }
       });
       return () => unsubscribe();
@@ -730,7 +730,7 @@ export default function ReservationScreen({ route }) {
                 const notificationsRef = collection(db, "notifications");
                 const notificationData = {
                   type: "reservation",
-                  details: `A new reservation for slot ${selectedSlot} has been made.`,
+                  details: `A new reservation for slot ${selectedSlot} has been made with image proof.`,
                   timestamp: new Date(),
                   managementName: item.managementName,
                   userEmail: email,
@@ -742,7 +742,7 @@ export default function ReservationScreen({ route }) {
 
                 Alert.alert(
                   "Reservation Successful",
-                  `Slot ${selectedSlot} at ${item.managementName} reserved successfully!`
+                  `Slot ${selectedSlot} at ${item.managementName} reserved successfully with image proof!`
                 );
                 setSuccessfullyReservedSlots([
                   ...successfullyReservedSlots,
