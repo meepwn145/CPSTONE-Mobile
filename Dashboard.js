@@ -39,6 +39,7 @@ import {
   uploadBytes,
   getDownloadURL,
 } from "firebase/storage";
+import { fetchData, fetchSlotData } from "./helper/helper";
 
 export default function Dashboard() {
   const [selectedLocation, setUnreadNotifications] = useState(null);
@@ -58,48 +59,78 @@ export default function Dashboard() {
     reservationDetails?.status !== "Paid" ? true : false
   );
 
-  console.log("Bruh");
-  console.log(reservationDetails);
+  const [userInformation, setUserInformation] = useState(null);
+
+  useEffect(() => {
+    const unsubscribe = fetchData(
+      {
+        collectionName: "user",
+        conditions: [["email", "==", auth.currentUser.email]],
+      },
+      ({ data, error }) => {
+        if (error) {
+          setUserInformation(null);
+        } else if (data) {
+          setUserInformation(data[0]);
+        }
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
 
   const [reservationInformation, setreservationInformation] = useState(null);
 
   useEffect(() => {
+    const fetchData = () => {
+      const q = query(
+        collection(db, "reservations"),
+        where("userEmail", "==", user.email)
+      );
+
+      const unsubscribe = onSnapshot(
+        q,
+        (querySnapshot) => {
+          if (querySnapshot.empty) {
+            setreservationInformation(null);
+            return;
+          }
+
+          // Handle the case for a single reservation document
+          const reservation = querySnapshot.docs[0].data();
+          setreservationInformation(reservation);
+        },
+        (error) => {}
+      );
+
+      return unsubscribe;
+    };
+
     const unsubscribe = fetchData();
-
-    // Cleanup the listener when the component unmounts
     return () => unsubscribe();
-  }, []); // Empty dependency array ensures this runs only once
+  }, []);
 
-  const fetchData = () => {
-    console.log("Listening for real-time data...");
-  
-    const q = query(
-      collection(db, "reservations"),
-      where("userEmail", "==", user.email)
-    );
-  
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      if (querySnapshot.empty) {
-        console.log("No reservations found for this user.");
-        setreservationInformation(null); // Clear reservation info when no document exists
-        return;
-      }
-  
-      // Handle the case for a single reservation document
-      const reservation = querySnapshot.docs[0].data();
-      setreservationInformation(reservation);
-      console.log("Real-time reservation data:", reservation);
-    }, 
-    (error) => {
-      console.error("Error fetching real-time data:", error);
-    });
-  
-    return unsubscribe;
-  };
-  
+  const [accepetedReservation, setaccepetedReservation] = useState(null);
+  useEffect(() => {
+    if (reservationInformation === null && userInformation !== null) {
+      const unsubscribe = fetchSlotData(
+        {
+          parentCollection: "slot",
+          documentId: userInformation?.reservationInformation?.managementName,
+          subCollection: "slotData",
+          reservationId: userInformation?.reservationInformation?.reservationId,
+        },
+        ({ data, error }) => {
+          if (error) {
+          } else {
+            setaccepetedReservation(data[0]);
+          }
+        }
+      );
 
-  console.log("worht fighting");
-  console.log(reservationInformation);
+      return () => unsubscribe();
+    }
+  }, [reservationInformation, userInformation]);
 
   useEffect(() => {
     const fetchRecommended = async () => {
@@ -154,9 +185,7 @@ export default function Dashboard() {
           "7xmUkgEHBQtdSvSHDbZ9zd"
         );
         setUnreadNotificationCount(count);
-      } catch (error) {
-        console.error("Error fetching unread notification count:", error);
-      }
+      } catch (error) {}
     }
   };
 
@@ -167,9 +196,7 @@ export default function Dashboard() {
   const emptyStorage = async () => {
     try {
       await AsyncStorage.setItem("reservedSlots", JSON.stringify([]));
-    } catch (error) {
-      console.error("Error saving reserved slots to AsyncStorage:", error);
-    }
+    } catch (error) {}
   };
   useFocusEffect(
     React.useCallback(() => {
@@ -238,7 +265,6 @@ export default function Dashboard() {
     const getCurrentLoc = async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        console.log("Please grant location permissions");
         return;
       }
       let currentLocation;
@@ -259,7 +285,6 @@ export default function Dashboard() {
           store.lng = location.coords.longitude;
         });
       } else {
-        console.log("Location update failed!");
       }
     };
     getCurrentLoc();
@@ -272,10 +297,7 @@ export default function Dashboard() {
   }, [reservationConfirmed]);
 
   const handleCarouselCard = (item) => {
-    console.log("Selected item:", item); // Debug log to see what's being passed
-
     if (!item || !item.managementName) {
-      console.error("No valid establishment or management name found:", item);
       return; // Prevent further execution if item is not valid
     }
 
@@ -328,7 +350,6 @@ export default function Dashboard() {
     const getCurrentLoc = async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        console.log("Please grant location permissions");
         return;
       }
 
@@ -353,7 +374,6 @@ export default function Dashboard() {
           store.lng = location.coords.longitude;
         });
       } else {
-        console.log("Location update failed!");
       }
     };
 
@@ -378,9 +398,7 @@ export default function Dashboard() {
     );
   };
 
-  useEffect(() => {
-    console.log("Recommended places awsad:", recommendedPlaces);
-  }, [recommendedPlaces]);
+  useEffect(() => {}, [recommendedPlaces]);
   const renderParkedHistoryItem = ({ item }) => {
     return (
       <View style={styles.historyItemContainer}>
@@ -398,30 +416,37 @@ export default function Dashboard() {
   };
 
   const handleReservationStatusClick = () => {
-    if (isActive && reservationDetails) {
+    if (accepetedReservation) {
       navigation.navigate("reservation", {
-        item: reservationDetails,
-        selectedFloor: reservationDetails.floorTitle, // Pass the floor title
-        selectedSlot: reservationDetails.slotNumber, // Pass the slot number
+        item: {
+          floorTitle: userInformation.reservationInformation.floorTitle,
+          managementName: userInformation.reservationInformation.managementName,
+          parkingPay: userInformation.reservationInformation.parkingPay,
+          reservationId: userInformation.reservationInformation.reservationId,
+          slotNumber: userInformation.reservationInformation.slotNumber + 1,
+          status: "Active",
+        },
+        selectedFloor: accepetedReservation.userDetails.floorTitle, // Pass the floor title
+        selectedSlot: accepetedReservation.userDetails.slotId, // Pass the slot number
       });
     } else {
       Alert.alert("Navigation Error", "No active reservation to navigate.");
     }
   };
-  
 
   useEffect(() => {
     if (user) {
-      console.log("Current User:", user);
     } else {
-      console.log("No user is logged in");
     }
   }, [user]);
+
+  console.log("is it worh itt");
+  console.log(reservationInformation?.status);
+  console.log(accepetedReservation?.reserveStatus);
 
   const handleLogout = async () => {
     try {
       if (!auth.currentUser) {
-        console.error("No user currently logged in to logout");
         alert("No user is logged in");
         return;
       }
@@ -429,23 +454,19 @@ export default function Dashboard() {
       // Ensure we have the user's email or a valid identifier for unregistration
       const userEmail = auth.currentUser.email;
       if (!userEmail) {
-        console.error("No email found for the current user");
         alert("Failed to retrieve user email for logout");
         return;
       }
 
       // Call Native Notify to unregister the device
       await unregisterIndieDevice(userEmail, 24190, "7xmUkgEHBQtdSvSHDbZ9zd");
-      console.log("Indie ID unregistration successful for email:", userEmail);
 
       // Proceed with Firebase sign-out or other cleanup actions
       await auth.signOut();
-      console.log("Firebase sign-out successful for UID:", userEmail);
 
       // Redirect or update UI post-logout
       navigation.navigate("Login"); // Uncomment or modify based on your routing needs
     } catch (error) {
-      console.error("Error during logout:", error.message);
       alert("Logout failed: " + error.message);
     }
   };
@@ -467,10 +488,9 @@ export default function Dashboard() {
       }
 
       const data = await response.json();
-      console.log("Unregistered Indie Subs for user ID:", user.email);
+
       Alert.alert("Success", "You have been successfully unsubscribed.");
     } catch (error) {
-      console.error("Error during Indie Subs unregistration:", error);
       Alert.alert("Error", "Unsubscription failed.");
     } finally {
       setIsLoading(false); // Stops loading after completion
@@ -484,14 +504,11 @@ export default function Dashboard() {
     const response = await fetch(localUri);
     const blob = await response.blob();
 
-    console.log();
     try {
       await uploadBytes(fileRef, blob);
       const downloadURL = await getDownloadURL(fileRef);
-      console.log("Image uploaded and URL received:", downloadURL);
       return downloadURL;
     } catch (error) {
-      console.error("Error uploading image to Firebase Storage:", error);
       throw new Error("Failed to upload image.");
     }
   };
@@ -506,210 +523,218 @@ export default function Dashboard() {
       <View style={styles.container}>
         <Image style={styles.navbar} />
         <View style={styles.logoContainer}>
-        <Text style={styles.logoText}>Recommended nearby parking spaces</Text>
-    <Text style={styles.logoSubText}>Secure your spots now!</Text>
-  </View>
-  <View style={styles.container}>
-    <View>
-      <FlatList
-        ref={flatListRef}
-        data={recommendedPlaces}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        keyExtractor={(item, index) => index.toString()}
-        renderItem={renderCarouselItem}
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={{
-          itemVisiblePercentThreshold: 50,
-        }}
-      />
-    </View>
-    <View style={styles.separatorLine} />
-    <View style={{ maxWidth: 400, marginBottom: 20 }}>
-      <View>
-      {!reservationInformation?.status || reservationInformation?.status === "Inactive" ? (
-
-        <View style={{ justifyContent: "center", alignItems: "center" }}>
-          <View style={styles.additionalCard}>
-            <Text style={styles.additionalCardTitle}>
-              Explore more parking places
-            </Text>
-            <Text style={styles.additionalCardContent}>
-              More parking areas are available here!
-            </Text>
-            <TouchableOpacity
-              style={styles.additionalButton}
-              onPress={() => navigation.navigate("Map")}
-            >
-              <Text style={styles.additionalButtonText}>Explore</Text>
-            </TouchableOpacity>
-          </View>
+          <Text style={styles.logoText}>Recommended nearby parking spaces</Text>
+          <Text style={styles.logoSubText}>Secure your spots now!</Text>
         </View>
-  ) : null}
-
-        <TouchableOpacity
-          style={[
-            styles.reservationStatusContainer,
-            isActive ? styles.active : styles.inactive,
-          ]}
-          onPress={handleReservationStatusClick}
-        >
-          <Text style={styles.reservationStatusText}>
-            Reservation Status: {reservationInformation?.status || "Inactive"}
-          </Text>
-        </TouchableOpacity>
-
-        {reservationInformation?.status === "Accepted" && (
-          <TouchableOpacity
-            style={[
-              styles.reservationStatusContainer,
-              isActive ? styles.active : styles.inactive,
-            ]}
-            onPress={async () => {
-              const imagePicker = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: true,
-                aspect: [4, 3],
-                quality: 1,
-              });
-
-              if (imagePicker.cancelled) {
-                Alert.alert(
-                  "Image Upload",
-                  "You need to upload an image to proceed with the reservation."
-                );
-                return;
-              }
-
-              const uri = imagePicker.assets[0].uri;
-              const imageUrl = await uploadImageToStorage(
-                uri,
-                user.email,
-                Math.random()
-              );
-              if (imageUrl) {
-                const q = query(
-                  collection(db, "reservations"),
-                  where("userEmail", "==", user.email)
-                );
-                const result = await getDocs(q);
-                if (!result.empty) {
-                  const docRef = result.docs[0].ref;
-                  await updateDoc(docRef, {
-                    status: "Paid",
-                    imageUri: imageUrl,
-                  });
-                }
-              }
-            }}
-          >
-            <Text style={styles.reservationStatusText}>Upload Photo</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </View>
-  </View>
-</View>
-        <View style={styles.tabBarContainer}>
-          <View style={[styles.tabBar, { opacity: 0.8 }]}>
-            <TouchableOpacity style={styles.tabBarButton} onPress={goToProfile}>
-              <AntDesign name="user" size={24} color="#A08C5B" />
-              <Text style={styles.tabBarText}>Profile</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.tabBarButton}
-              onPress={() => handleCardClick("Search")}
-            >
-              <AntDesign name="earth" size={24} color="#A08C5B" />
-              <Text style={styles.tabBarText}>Search</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.tabBarButton}
-              onPress={() => navigation.navigate("Notifications", { user })}
-            >
-              <View style={{ position: "relative" }}>
-                <AntDesign name="bells" size={24} color="#A08C5B" />
-                {unreadNotificationCount > 0 && (
-                  <View style={styles.notificationBubble}>
-                    <Text style={styles.notificationCount}>
-                      {unreadNotificationCount}
+        <View style={styles.container}>
+          <View>
+            <FlatList
+              ref={flatListRef}
+              data={recommendedPlaces}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              keyExtractor={(item, index) => index.toString()}
+              renderItem={renderCarouselItem}
+              onViewableItemsChanged={onViewableItemsChanged}
+              viewabilityConfig={{
+                itemVisiblePercentThreshold: 50,
+              }}
+            />
+          </View>
+          <View style={styles.separatorLine} />
+          <View style={{ maxWidth: 400, marginBottom: 20 }}>
+            <View>
+              {!reservationInformation?.status ||
+              reservationInformation?.status === "Inactive" ? (
+                <View
+                  style={{ justifyContent: "center", alignItems: "center" }}
+                >
+                  <View style={styles.additionalCard}>
+                    <Text style={styles.additionalCardTitle}>
+                      Explore more parking places
                     </Text>
+                    <Text style={styles.additionalCardContent}>
+                      More parking areas are available here!
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.additionalButton}
+                      onPress={() => navigation.navigate("Map")}
+                    >
+                      <Text style={styles.additionalButtonText}>Explore</Text>
+                    </TouchableOpacity>
                   </View>
-                )}
-              </View>
-              <Text style={styles.tabBarText}>Notifications</Text>
-            </TouchableOpacity>
+                </View>
+              ) : null}
 
-            <TouchableOpacity
-              style={styles.tabBarButton}
-              onPress={handleBarsClick}
-            >
-              <AntDesign name="bars" size={24} color="#A08C5B" />
-              <Text style={styles.tabBarText}>Menu</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.reservationStatusContainer,
+                  accepetedReservation?.reserveStatus
+                    ? styles.active
+                    : isActive
+                    ? styles.active
+                    : styles.inactive,
+                ]}
+                onPress={handleReservationStatusClick}
+                disabled={
+                  reservationInformation?.status !== undefined ? true : false
+                }
+              >
+                <Text style={styles.reservationStatusText}>
+                  Reservation Status:{" "}
+                  {reservationInformation?.status ||
+                    accepetedReservation?.reserveStatus}
+                </Text>
+              </TouchableOpacity>
+
+              {reservationInformation?.status === "Accepted" && (
+                <TouchableOpacity
+                  style={[
+                    styles.reservationStatusContainer,
+                    isActive ? styles.active : styles.inactive,
+                  ]}
+                  onPress={async () => {
+                    const imagePicker =
+                      await ImagePicker.launchImageLibraryAsync({
+                        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                        allowsEditing: true,
+                        aspect: [4, 3],
+                        quality: 1,
+                      });
+
+                    if (imagePicker.cancelled) {
+                      Alert.alert(
+                        "Image Upload",
+                        "You need to upload an image to proceed with the reservation."
+                      );
+                      return;
+                    }
+
+                    const uri = imagePicker.assets[0].uri;
+                    const imageUrl = await uploadImageToStorage(
+                      uri,
+                      user.email,
+                      Math.random()
+                    );
+                    if (imageUrl) {
+                      const q = query(
+                        collection(db, "reservations"),
+                        where("userEmail", "==", user.email)
+                      );
+                      const result = await getDocs(q);
+                      if (!result.empty) {
+                        const docRef = result.docs[0].ref;
+                        await updateDoc(docRef, {
+                          status: "Paid",
+                          imageUri: imageUrl,
+                        });
+                      }
+                    }
+                  }}
+                >
+                  <Text style={styles.reservationStatusText}>Upload Photo</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         </View>
-        <Modal
-          animationType="fade"
-          transparent={true}
-          visible={isSidebarVisible}
-        >
-          <TouchableWithoutFeedback onPress={() => setSidebarVisible(false)}>
-            <View style={styles.modalBackground}>
-              <TouchableWithoutFeedback>
-                <View style={styles.sidebar}>
-                  <TouchableOpacity
-                    style={styles.sidebarButton}
-                    onPress={() => handleCardClick("Feedback")}
-                  >
-                    <Image
-                      source={{ uri: "https://i.imgur.com/c4io4vB.jpeg" }}
-                      style={styles.sidebarIcon}
-                    />
-                    <Text style={styles.sidebarButtonText}>Feedback</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.sidebarButton}
-                    onPress={() => handleCardClick("Transaction")}
-                  >
-                    <Image
-                      source={{ uri: "https://i.imgur.com/MeRPAqt.png" }}
-                      style={styles.sidebarIcon}
-                    />
-                    <Text style={styles.sidebarButtonText}>Transaction</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.sidebarButton}
-                    onPress={() => handleCardClick("Park")}
-                  >
-                    <Image
-                      source={{ uri: "https://i.imgur.com/vetauvM.png" }}
-                      style={styles.sidebarIcon}
-                    />
-                    <Text style={styles.sidebarButtonText}>Parking</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.sidebarButton}
-                    onPress={() => handleLogout("Start")}
-                  >
-                    <Image
-                      source={{ uri: "https://i.imgur.com/YzzzEXD.png" }}
-                      style={styles.sidebarIcon}
-                    />
-                    <Text style={styles.sidebarButtonText}>Log Out</Text>
-                  </TouchableOpacity>
-                </View>
-              </TouchableWithoutFeedback>
-            </View>
-          </TouchableWithoutFeedback>
-        </Modal>
       </View>
+      <View style={styles.tabBarContainer}>
+        <View style={[styles.tabBar, { opacity: 0.8 }]}>
+          <TouchableOpacity style={styles.tabBarButton} onPress={goToProfile}>
+            <AntDesign name="user" size={24} color="#A08C5B" />
+            <Text style={styles.tabBarText}>Profile</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.tabBarButton}
+            onPress={() => handleCardClick("Search")}
+          >
+            <AntDesign name="earth" size={24} color="#A08C5B" />
+            <Text style={styles.tabBarText}>Search</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.tabBarButton}
+            onPress={() => navigation.navigate("Notifications", { user })}
+          >
+            <View style={{ position: "relative" }}>
+              <AntDesign name="bells" size={24} color="#A08C5B" />
+              {unreadNotificationCount > 0 && (
+                <View style={styles.notificationBubble}>
+                  <Text style={styles.notificationCount}>
+                    {unreadNotificationCount}
+                  </Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.tabBarText}>Notifications</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.tabBarButton}
+            onPress={handleBarsClick}
+          >
+            <AntDesign name="bars" size={24} color="#A08C5B" />
+            <Text style={styles.tabBarText}>Menu</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+      <Modal animationType="fade" transparent={true} visible={isSidebarVisible}>
+        <TouchableWithoutFeedback onPress={() => setSidebarVisible(false)}>
+          <View style={styles.modalBackground}>
+            <TouchableWithoutFeedback>
+              <View style={styles.sidebar}>
+                <TouchableOpacity
+                  style={styles.sidebarButton}
+                  onPress={() => handleCardClick("Feedback")}
+                >
+                  <Image
+                    source={{ uri: "https://i.imgur.com/c4io4vB.jpeg" }}
+                    style={styles.sidebarIcon}
+                  />
+                  <Text style={styles.sidebarButtonText}>Feedback</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.sidebarButton}
+                  onPress={() => handleCardClick("Transaction")}
+                >
+                  <Image
+                    source={{ uri: "https://i.imgur.com/MeRPAqt.png" }}
+                    style={styles.sidebarIcon}
+                  />
+                  <Text style={styles.sidebarButtonText}>Transaction</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.sidebarButton}
+                  onPress={() => handleCardClick("Park")}
+                >
+                  <Image
+                    source={{ uri: "https://i.imgur.com/vetauvM.png" }}
+                    style={styles.sidebarIcon}
+                  />
+                  <Text style={styles.sidebarButtonText}>Parking</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.sidebarButton}
+                  onPress={() => handleLogout("Start")}
+                >
+                  <Image
+                    source={{ uri: "https://i.imgur.com/YzzzEXD.png" }}
+                    style={styles.sidebarIcon}
+                  />
+                  <Text style={styles.sidebarButtonText}>Log Out</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+    </View>
   );
 }
 
