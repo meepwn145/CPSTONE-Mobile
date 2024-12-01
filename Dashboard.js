@@ -24,6 +24,7 @@ import {
   onSnapshot,
   updateDoc,
   firestore,
+  addDoc,
 } from "firebase/firestore";
 import { db } from "./config/firebase";
 import { unregisterIndieDevice } from "native-notify";
@@ -174,15 +175,18 @@ export default function Dashboard() {
   useFocusEffect(
     React.useCallback(() => {
       setIsActive(reservationDetails?.status === "Inactive" ? false : true);
-      if (reservationDetails.reservationId !== "") {
+  
+      if (reservationDetails.reservationId) {
         const q = query(
           collection(db, "resStatus"),
           where("reservationId", "==", reservationDetails.reservationId)
         );
+  
         const unsubscribe = onSnapshot(q, (querySnapshot) => {
           if (!querySnapshot.empty) {
             querySnapshot.forEach((doc) => {
               const data = doc.data();
+              console.log("Real-time update received:", data); // Debug log
               if (data.resStatus === "Declined") {
                 Alert.alert(
                   "Declined",
@@ -198,6 +202,7 @@ export default function Dashboard() {
                   s.parkingPay = "";
                 });
               } else if (data.resStatus === "Accepted") {
+                console.log("Accepted. Setting to active.");
                 setIsActive(true);
                 ReservationStore.update((s) => {
                   s.status = "Active";
@@ -206,10 +211,12 @@ export default function Dashboard() {
             });
           }
         });
+  
         return () => unsubscribe();
       }
-    }, [reservationDetails.reservationId])
+    }, [reservationDetails.reservationId, reservationDetails.status])
   );
+  
   useFocusEffect(
     React.useCallback(() => {
       if (reservationDetails.status === "Active") {
@@ -600,9 +607,34 @@ export default function Dashboard() {
                     status: "Paid",
                     imageUri: imageUrl,
                   });
-                }
-              }
-            }}
+                  const notificationsRef = collection(db, "notifications");
+        const notificationData = {
+          type: "reservation_payment",
+          details: `Reservation payment completed for ${reservationInformation.slotNumber} at ${reservationInformation.managementName}.`,
+          timestamp: new Date(),
+          managementName: reservationInformation.managementName,
+          userEmail: user.email,
+          imageUri: imageUrl,
+        };
+
+        console.log("Notification data:", notificationData);
+
+        try {
+          await addDoc(notificationsRef, notificationData);
+          Alert.alert(
+            "Payment Success",
+            `Your payment for slot ${reservationInformation.slotNumber} at ${reservationInformation.managementName} has been confirmed.`
+          );
+        } catch (error) {
+          console.error("Error adding notification:", error);
+          Alert.alert(
+            "Notification Error",
+            "Failed to notify management. Please contact support."
+          );
+        }
+      }
+    }
+  }}
           >
             <Text style={styles.reservationStatusText}>Upload Photo</Text>
           </TouchableOpacity>

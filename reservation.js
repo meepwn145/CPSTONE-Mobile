@@ -699,7 +699,7 @@ const processEstablishmentData = (establishmentData) => {
                 const notificationsRef = collection(db, "notifications");
                 const notificationData = {
                   type: "reservation",
-                  details: `A new reservation for slot ${selectedSlot} has been made with image proof.`,
+                  details: `A new reservation for slot ${selectedSlot} has been made.`,
                   timestamp: new Date(),
                   managementName: item.managementName,
                   userEmail: email,
@@ -711,7 +711,7 @@ const processEstablishmentData = (establishmentData) => {
 
                 Alert.alert(
                   "Reservation Successful",
-                  `Slot ${selectedSlot} at ${item.managementName} reserved successfully with image proof!`
+                  `Slot ${selectedSlot} at ${item.managementName} reserved successfully!`
                 );
                 setSuccessfullyReservedSlots([
                   ...successfullyReservedSlots,
