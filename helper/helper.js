@@ -4,6 +4,7 @@ import {
   where,
   onSnapshot,
   getDocs,
+  doc,
 } from "firebase/firestore";
 import { db } from "../config/firebase";
 
@@ -80,4 +81,53 @@ export const fetchReservation = ({ collectionName, conditions }, callback) => {
   );
 
   return unsubscribe;
+};
+
+// Fetch inside a document
+
+export const fetchSlotData = (
+  { parentCollection, documentId, subCollection, reservationId },
+  callback
+) => {
+  try {
+    // Reference to the 'slot' collection
+    const parentRef = collection(db, parentCollection);
+
+    // Reference to the 'Gilbert Canete Parking Management' document inside 'slot'
+    const documentRef = doc(parentRef, documentId);
+
+    // Reference to the 'slotData' subcollection inside the document
+    const subCollectionRef = collection(documentRef, subCollection);
+
+    // Optionally, use query to filter documents (if reservationId is provided)
+    const q = reservationId
+      ? query(subCollectionRef, where("reservationId", "==", reservationId)) // Filter by reservationId
+      : subCollectionRef;
+
+    // Get documents from the subcollection
+    const unsubscribe = onSnapshot(
+      q,
+      (querySnapshot) => {
+        if (querySnapshot.empty) {
+          callback({ data: null, error: "No data found." });
+          return;
+        }
+
+        const data = querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        callback({ data, error: null }); // Pass data to callback
+      },
+      (error) => {
+        callback({ data: null, error: "Error fetching data." });
+      }
+    );
+
+    return unsubscribe; // Return unsubscribe function to stop listening
+  } catch (error) {
+    console.error("Error fetching slot data:", error);
+    callback({ data: null, error: "Error fetching data." });
+  }
 };
