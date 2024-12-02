@@ -776,6 +776,7 @@ export default function ReservationScreen({ route }) {
                   parkingPay: fee,
                   userName: userInformation?.name,
                   reservationDuration: item.reservationDuration,
+                  slotNumber: selectedSlot,
                 };
 
                 const uniqueDocName = `slot_${floorTitle}_${slotIndex}`;
@@ -1068,10 +1069,13 @@ export default function ReservationScreen({ route }) {
           <View>
             <Text style={styles.infoTextTitle}>Your Reservation</Text>
             <Text style={styles.infoText}>
+       {reservationInformation?.floorTitle ??
+        accepetedReservation?.userDetails.floorTitle}
+       {" "}Floor
               Slot{" "}
-              {!isNaN(reservationInformation?.slotId + 1)
-                ? reservationInformation?.slotId + 1
-                : accepetedReservation?.userDetails.slotId + 1}{" "}
+              {!isNaN(reservationInformation?.slotNumber)
+                ? reservationInformation?.slotNumber
+                : accepetedReservation?.userDetails.slotNumber}{" "}
               at{" "}
               {reservationInformation?.managementName ??
                 userInformation?.reservationInformation.managementName}
