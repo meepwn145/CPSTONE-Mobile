@@ -104,33 +104,100 @@ export default function ReservationScreen({ route }) {
       }
     }, [slotSets])
   );
-  useEffect(() => {
-    const fetchReservations = async () => {
-      if (!auth.currentUser?.email) return;
-
+  useFocusEffect(
+    React.useCallback(() => {
       const q = query(
         collection(db, "reservations"),
-        where("userEmail", "==", auth.currentUser.email) // Fetch reservations for the current user
+        where("userEmail", "==", auth.currentUser?.email)
       );
-
+  
       const unsubscribe = onSnapshot(q, (snapshot) => {
         if (!snapshot.empty) {
           const reservationData = snapshot.docs.map((doc) => ({
             id: doc.id,
             ...doc.data(),
           }));
-          setreservationInformation(reservationData[0]); // Assuming one reservation per user
+          setreservationInformation(reservationData[0]);
+          setReservedSlots([{
+            slotNumber: reservationData[0]?.slotId + 1,
+            managementName: reservationData[0]?.managementName,
+            parkingPay: reservationData[0]?.parkingPay,
+          }]);
         } else {
           setreservationInformation(null);
-          setReservationStatus(""); // Clear the status text
+          setReservedSlots([]);
         }
       });
-
-      return () => unsubscribe();
+  
+      return () => {
+        unsubscribe(); // Unsubscribe when screen is unfocused
+      };
+    }, [auth.currentUser?.email])
+  );
+  
+  useFocusEffect(
+    React.useCallback(() => {
+      if (auth.currentUser?.email) {
+        // Fetch reservation data again when screen is focused
+        const fetchReservation = async () => {
+          const q = query(
+            collection(db, "reservations"),
+            where("userEmail", "==", auth.currentUser.email)
+          );
+  
+          const snapshot = await getDocs(q);
+          if (!snapshot.empty) {
+            const reservationData = snapshot.docs.map((doc) => ({
+              id: doc.id,
+              ...doc.data(),
+            }));
+            setreservationInformation(reservationData[0]);
+            setReservedSlots([{
+              slotNumber: reservationData[0]?.slotId + 1,
+              managementName: reservationData[0]?.managementName,
+              parkingPay: reservationData[0]?.parkingPay,
+            }]);
+          } else {
+            setreservationInformation(null);
+            setReservedSlots([]);
+          }
+        };
+        fetchReservation();
+      }
+    }, [auth.currentUser?.email])
+  );
+  useEffect(() => {
+    if (reservedSlots.length > 0) {
+      const saveReservedSlots = async () => {
+        try {
+          await AsyncStorage.setItem(
+            `reservedSlots_${email}`,
+            JSON.stringify(reservedSlots)
+          );
+        } catch (error) {
+          console.error("Error saving reserved slots to AsyncStorage:", error);
+        }
+      };
+      saveReservedSlots();
+    }
+  }, [reservedSlots, email]);
+  useEffect(() => {
+    const loadReservedSlots = async () => {
+      try {
+        const storedReservedSlots = await AsyncStorage.getItem(`reservedSlots_${email}`);
+        if (storedReservedSlots) {
+          setReservedSlots(JSON.parse(storedReservedSlots));
+        }
+      } catch (error) {
+        console.error("Error loading reserved slots from AsyncStorage:", error);
+      }
     };
-
-  }, [auth.currentUser?.email]);
-
+  
+    if (email) {
+      loadReservedSlots();
+    }
+  }, [email]);
+  
   useEffect(() => {
     const reservationsRef = collection(db, "reservations");
     const unsubscribe = onSnapshot(reservationsRef, (snapshot) => {
@@ -578,7 +645,9 @@ export default function ReservationScreen({ route }) {
       return () => unsubscribe();
     }
   }, [reservationDetails.status]);
-
+  console.log("Reserved Slots:", reservedSlots);
+  console.log("Selected Slot:", selectedSlot);
+  
   const [accepetedReservation, setaccepetedReservation] = useState(null);
   useEffect(() => {
     if (reservationInformation === null && userInformation !== null) {
@@ -793,26 +862,9 @@ export default function ReservationScreen({ route }) {
   const handleCancelReservation = async () => {
     const reservedSlot = reservedSlots.find(
       (slot) =>
-        slot.slotNumber === selectedSlot &&
-        slot.managementName === item.managementName
+        slot.slotNumber === selectedSlot && slot.managementName === item.managementName
     );
-
-    // Check if the slot is occupied
-    const isSlotOccupied = slotSets.some((floor) =>
-      floor.slots.some(
-        (slot) => slot.slotNumber === selectedSlot && slot.occupied
-      )
-    );
-
-    if (isSlotOccupied) {
-      Alert.alert(
-        "Cancellation Not Allowed",
-        "This slot is currently occupied and cannot be canceled.",
-        [{ text: "OK", style: "default" }]
-      );
-      return;
-    }
-
+  
     if (reservedSlot) {
       Alert.alert(
         "Cancel Reservation",
@@ -829,15 +881,26 @@ export default function ReservationScreen({ route }) {
                 const q = query(
                   collection(db, "reservations"),
                   where("managementName", "==", item.managementName),
-                  where("userEmail", "==", email)
-                );
+                  where("userEmail", "==", email),
+                  where("slotId", "==", selectedSlot - 1) // Adjust slotId by subtracting 1
+                  );
                 const querySnapshot = await getDocs(q);
-
+  
+                if (querySnapshot.empty) {
+                  console.log("No matching reservation found.");
+                  Alert.alert(
+                    "Cancellation Failed",
+                    "No matching reservation found. Please try again.",
+                    [{ text: "OK", style: "default" }]
+                  );
+                  return;
+                }
+  
                 querySnapshot.forEach(async (doc) => {
                   console.log("Document found: ", doc.id);
                   await deleteDoc(doc.ref);
                 });
-
+  
                 setReservedSlots((prevSlots) =>
                   prevSlots.filter(
                     (slot) =>
@@ -853,13 +916,6 @@ export default function ReservationScreen({ route }) {
                 setSuccessfullyReservedSlots((prev) =>
                   prev.filter((slot) => slot !== selectedSlot)
                 );
-                // setReservationId("");
-                // ReservationStore.update((s) => {
-                //   s.reservationId = "";
-                //   s.status = "Inactive";
-                //   s.managementName = "";
-                //   s.parkingPay = "";
-                // });
               } catch (error) {
                 console.error("Error canceling reservation:", error);
                 Alert.alert(
@@ -881,15 +937,8 @@ export default function ReservationScreen({ route }) {
       );
     }
   };
+  
 
-  console.log("Setting reservation details:", {
-    reservationId: reservationDetails.reservationId,
-    status: reservationDetails.status,
-    managementName: reservationDetails.managementName,
-    parkingPay: reservationDetails.parkingPay,
-    floorTitle: reservationDetails.floorTitle, // Log floor title
-    slotNumber: reservationDetails.slotNumber, // Log slot number
-  });
 
   const totalAmount = reservedSlots.length * SLOT_PRICE;
   return (
