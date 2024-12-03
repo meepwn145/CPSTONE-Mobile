@@ -809,11 +809,7 @@ export default function ReservationScreen({ route }) {
                 console.log(notificationData);
                 console.log("I REACH HERE");
                 await addDoc(notificationsRef, notificationData);
-
-                Alert.alert(
-                  "Reservation Successful",
-                  `Slot ${selectedSlot} at ${item.managementName} reserved successfully with image proof!`
-                );
+                
                 setSuccessfullyReservedSlots([
                   ...successfullyReservedSlots,
                   selectedSlot,
@@ -826,6 +822,19 @@ export default function ReservationScreen({ route }) {
                   s.floorTitle = floorTitle;
                   s.slotNumber = selectedSlot;
                 });
+
+                Alert.alert(
+                  "Reservation Successful",
+                  `Slot ${selectedSlot} at ${item.managementName} reserved successfully! Please wait for the approval from the operator!`,
+                  [
+                    {
+                      text: "OK",
+                      onPress: () => {
+                        navigation.navigate("Dashboard"); // Navigate back to Dashboard after pressing OK
+                      },
+                    },
+                  ]
+                );
               } catch (error) {
                 console.error("Error saving reservation:", error);
                 Alert.alert(
