@@ -1,4 +1,6 @@
 import { Store, registerInDevtools } from "pullstate";
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from './config/firebase';
 
 export const LocationStore = new Store({
     lat: 10.1735,
@@ -11,7 +13,9 @@ export const ReservationStore = new Store({
 	managementName: "",
 	parkingPay: "",
 	floorTitle: "",  
-    slotNumber: ""   
+    slotNumber: ""  
 });
+
+
 
 registerInDevtools({ LocationStore });

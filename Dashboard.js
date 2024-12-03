@@ -199,6 +199,16 @@ export default function Dashboard() {
       await AsyncStorage.setItem("reservedSlots", JSON.stringify([]));
     } catch (error) {}
   };
+  useEffect(() => {
+    if (reservationInformation?.status === "Accepted") {
+      Alert.alert(
+        "Upload Required",
+        "Your reservation has been accepted. Please upload a photo to complete the reservation process.",
+        [{ text: "OK", style: "default" }]
+      );
+    }
+  }, [reservationInformation?.status]);
+  
   useFocusEffect(
     React.useCallback(() => {
       setIsActive(reservationDetails?.status === "Inactive" ? false : true);
@@ -227,19 +237,57 @@ export default function Dashboard() {
                   s.parkingPay = "";
                 });
               } else if (data.resStatus === "Accepted") {
-                console.log("Accepted. Setting to active.");
-                setIsActive(true);
-                ReservationStore.update((s) => {
-                  s.status = "Active";
-                });
+                Alert.alert(
+                  "Reservation Accepted",
+                  "Your reservation request has been accepted. You have secured your parking slot! Have a nice day",
+                  [
+                    {
+                      text: "OK",
+                      onPress: () => {
+                        console.log("Accepted. Setting to active.");
+                        setIsActive(true);
+                        ReservationStore.update((s) => {
+                          s.status = "Active";
+                        });
+                      },
+                    },
+                  ],
+                  { cancelable: false }
+                );
               }
             });
           }
         });
-        return () => unsubscribe();
+        const slotQuery = query(
+          collection(db, "slot", reservationDetails.managementName, "slotData"),
+          where("reservationId", "==", reservationDetails.reservationId)
+        );
+  
+        const unsubscribeSlot = onSnapshot(slotQuery, (querySnapshot) => {
+          if (reservationDetails.status === "Active" && querySnapshot.empty) {
+            Alert.alert(
+              "Exit Notification",
+              "You have already exited the parking slot. Thank you for visiting!",
+              [{ text: "OK" }]
+            );
+            emptyStorage();
+            setIsActive(false);
+            ReservationStore.update((s) => {
+              s.reservationId = "";
+              s.status = "Inactive";
+              s.managementName = "";
+              s.parkingPay = "";
+            });
+          }
+        });
+  
+        return () => {
+          unsubscribe();
+          unsubscribeSlot(); // Clean up both subscriptions
+        };
       }
     }, [reservationDetails.reservationId, reservationDetails.status])
-    );
+  );
   useFocusEffect(
 		React.useCallback(() => {
 			if (reservationDetails.status === "Active") {
