@@ -777,6 +777,7 @@ export default function ReservationScreen({ route }) {
                   userName: userInformation?.name,
                   reservationDuration: item.reservationDuration,
                   slotNumber: selectedSlot,
+                  allocatedTimeForArrival: item.allocatedTimeForArrival,      
                 };
 
                 const uniqueDocName = `slot_${floorTitle}_${slotIndex}`;

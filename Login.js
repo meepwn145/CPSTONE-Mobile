@@ -120,35 +120,7 @@ export function LoginScreen() {
       <TouchableOpacity style={[styles.button, {borderColor: '#87CEEB'}]} onPress={handleGoToSignIn}>
       <Text style={[styles.buttonText, {color: '#87CEEB'}]}>Create Account</Text>
       </TouchableOpacity>
-      <View style={styles.separator}>
-          <View style={styles.line} />
-          <Text style={styles.orText}>OR</Text>
-          <View style={styles.line} />
-        </View>
-        <View style={styles.logoContainer}>
-  <TouchableOpacity style={styles.socialButton}>
-    <Image
-  source={{ uri: 'https://i.imgur.com/djoqq8E.png' }}
-        style={styles.logo}
-    />
-  </TouchableOpacity>
-  <TouchableOpacity style={styles.socialButton}>
-    <Image
-      source={{ uri: 'https://i.imgur.com/RHKsn28.png' }}
-      style={styles.logo2}
-    />
-  </TouchableOpacity>
-  <TouchableOpacity style={styles.socialButton}>
-    <Image
-  source={{ uri: 'https://i.imgur.com/yx3frJ6.png' }}
-        style={styles.logo2}
-    />
-         
-  </TouchableOpacity>
-</View>
-<TouchableOpacity onPress={handleGoToSignIn}>
-           <Text style={{color: '#d3d3d3', marginTop: 15, textAlign: 'center'}}>Dont have an account? <Text style={{color: '#FFD700', fontWeight: 'bold'}}>Signup</Text></Text>
-        </TouchableOpacity>
+ 
           </View>
         </View>
  

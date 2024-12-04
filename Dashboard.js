@@ -56,6 +56,7 @@ export default function Dashboard() {
   const [recommended, setRecommended] = useState([]);
   const [reservationConfirmed, setReservationConfirmed] = useState(false); // Track reservation status
   const reservationDetails = useStoreState(ReservationStore);
+  const [alertShown, setAlertShown] = useState(false);
   const [isActive, setIsActive] = useState(
     reservationDetails?.status !== "Paid" ? true : false
   );
@@ -211,8 +212,8 @@ export default function Dashboard() {
   
   useFocusEffect(
     React.useCallback(() => {
-      setIsActive(reservationDetails?.status === "Inactive" ? false : true);
-      if (reservationDetails.reservationId !== "") {
+      if (reservationDetails.reservationId !== "" && reservationDetails.status === "Accepted" && !alertShown) {
+
         const q = query(
           collection(db, "resStatus"),
           where("reservationId", "==", reservationDetails.reservationId)
@@ -224,7 +225,7 @@ export default function Dashboard() {
               console.log("Real-time update received:", data); // Debug log
               if (data.resStatus === "Declined") {
                 Alert.alert(
-                  "Declined",
+  
                   "Your reservation request has been declined.",
                   [{ text: "OK", style: "default" }]
                 );
@@ -249,6 +250,7 @@ export default function Dashboard() {
                         ReservationStore.update((s) => {
                           s.status = "Active";
                         });
+                        setAlertShown(true); // Set alertShown to true after showing the alert
                       },
                     },
                   ],
@@ -286,7 +288,7 @@ export default function Dashboard() {
           unsubscribeSlot(); // Clean up both subscriptions
         };
       }
-    }, [reservationDetails.reservationId, reservationDetails.status])
+    }, [reservationDetails.reservationId, reservationDetails.status, alertShown])
   );
   useFocusEffect(
 		React.useCallback(() => {
@@ -742,29 +744,7 @@ export default function Dashboard() {
                   />
                   <Text style={styles.sidebarButtonText}>Feedback</Text>
                 </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.sidebarButton}
-                  onPress={() => handleCardClick("Transaction")}
-                >
-                  <Image
-                    source={{ uri: "https://i.imgur.com/MeRPAqt.png" }}
-                    style={styles.sidebarIcon}
-                  />
-                  <Text style={styles.sidebarButtonText}>Transaction</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.sidebarButton}
-                  onPress={() => handleCardClick("Park")}
-                >
-                  <Image
-                    source={{ uri: "https://i.imgur.com/vetauvM.png" }}
-                    style={styles.sidebarIcon}
-                  />
-                  <Text style={styles.sidebarButtonText}>Parking</Text>
-                </TouchableOpacity>
-
+     
                 <TouchableOpacity
                   style={styles.sidebarButton}
                   onPress={() => handleLogout("Start")}
