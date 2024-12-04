@@ -776,6 +776,7 @@ export default function ReservationScreen({ route }) {
                   parkingPay: fee,
                   userName: userInformation?.name,
                   reservationDuration: item.reservationDuration,
+                  allocatedTimeForArrival: item.allocatedTimeForArrival,
                   slotNumber: selectedSlot,
                 };
 
