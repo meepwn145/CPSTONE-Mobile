@@ -212,8 +212,8 @@ export default function Dashboard() {
   
   useFocusEffect(
     React.useCallback(() => {
-      if (reservationDetails.reservationId !== "" && reservationDetails.status === "Accepted" && !alertShown) {
-
+      setIsActive(reservationDetails?.status === "Inactive" ? false : true);
+      if (reservationDetails.reservationId !== "") {
         const q = query(
           collection(db, "resStatus"),
           where("reservationId", "==", reservationDetails.reservationId)
@@ -633,6 +633,14 @@ export default function Dashboard() {
     Reservation Status: {reservationDetails?.status || "Unknown"}
   </Text>
 </TouchableOpacity>
+{reservationDetails?.status === "Active" && reservationDetails?.allocatedTimeForArrival && (
+  <View style={styles.arrivalNoticeContainer}>
+    <Text style={styles.arrivalNoticeText}>
+      You need to arrive at {reservationDetails?.allocatedTimeForArrival}.
+    </Text>
+  </View>
+)}
+
 
 
 
@@ -849,6 +857,23 @@ const styles = StyleSheet.create({
   tabBarContainer: {
     marginTop: "60%",
   },
+  arrivalNoticeContainer: {
+    marginTop: 10, // Adds space between the status and the notice
+    padding: 10,
+    backgroundColor: "#f2f2f2", // Light background for the notice
+    borderRadius: 8,
+    width: "90%",
+    alignSelf: "center",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  arrivalNoticeText: {
+    fontSize: 14,
+    fontWeight: "bold",
+    color: "#333", // Darker text color for better readability
+  },
+  
+  
   tabBar: {
     flexDirection: "row",
     justifyContent: "space-around",

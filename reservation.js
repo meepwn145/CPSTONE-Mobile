@@ -759,7 +759,7 @@ export default function ReservationScreen({ route }) {
                     },
                   });
                 }
-
+                
                 console.log("ahmmm");
 
                 const reservationData = {
@@ -777,8 +777,13 @@ export default function ReservationScreen({ route }) {
                   userName: userInformation?.name,
                   reservationDuration: item.reservationDuration,
                   slotNumber: selectedSlot,
-                  allocatedTimeForArrival: item.allocatedTimeForArrival,      
+                  allocatedTimeForArrival: item.allocatedTimeForArrival,
+                  hourtType: item.hourType,
                 };
+                if (item.hourType === "Continuous") {
+                  reservationData.gracePeriod = item.gracePeriod;
+                  reservationData.continuousParkingFee = item.continuousParkingFee;
+                }
 
                 const uniqueDocName = `slot_${floorTitle}_${slotIndex}`;
                 const reservationsRef = collection(db, "reservations");

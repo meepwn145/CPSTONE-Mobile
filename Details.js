@@ -54,6 +54,7 @@ export default function DetailsScreen({ route }) {
                 managementName: item.managementName,
                 parkingPay: item.parkingPay,
                 availableSlots: availableSlots,
+                reservationDuration: item.reservationDuration,
             },
         });
     };
@@ -70,6 +71,8 @@ export default function DetailsScreen({ route }) {
                     <Image  source={item.profileImageUrl ? { uri: item.profileImageUrl } : require("./images/SPOTWISE.png")}
                      style={styles.image}/>
                     <Text style={styles.para1}>Open at: {item.openTime} A.M until {item.closeTime} P.M</Text>
+                    <Text style={styles.address}>Reservation Duration: {item.reservationDuration} minute(s)</Text>
+                    <Text style={styles.address}>Parking Type: {item.hourType}</Text>
                     <Text style={styles.para}>Located at</Text>
                     <Text style={styles.address}>{item.companyAddress}</Text>
                     <Text style={styles.address}>Parking Pay: {item.parkingPay}.00</Text>
