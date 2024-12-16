@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, Alert, ScrollView } from 'react-native';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import { collection, addDoc, setDoc, doc } from 'firebase/firestore';
+import { addDoc } from 'firebase/firestore';
 import { auth, db } from './config/firebase'; 
 import { useNavigation } from '@react-navigation/native';
+import { query, where, getDocs } from "firebase/firestore"; // Import Firestore functions
+import { collection, setDoc, doc } from "firebase/firestore";
 
 
 export function SignupScreen() {
@@ -20,30 +22,67 @@ export function SignupScreen() {
   const navigation = useNavigation();
 
   const handleSignup = async () => {
+    // Email validation: must include '@gmail.com' or '@yahoo.com'
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@(gmail\.com|yahoo\.com)$/;
+    if (!emailRegex.test(email)) {
+        Alert.alert("Error", "Please enter a valid email address with '@gmail.com' or '@yahoo.com'.");
+        return;
+    }
+
+    // Contact number validation: must be exactly 11 digits
+    const phoneRegex = /^\d{11}$/;
+    if (!phoneRegex.test(contactNumber)) {
+        Alert.alert("Error", "Contact number must consist of exactly 11 digits.");
+        return;
+    }
+
+    // Car plate number validation
+    if (!carPlateNumber) {
+        Alert.alert("Error", "Car plate number is required.");
+        return;
+    }
+
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;  
+        // Check if email already exists
+        const emailQuery = query(collection(db, "user"), where("email", "==", email));
+        const emailSnapshot = await getDocs(emailQuery);
+        if (!emailSnapshot.empty) {
+            Alert.alert("Error", "An account with this email already exists. Please use a different email.");
+            return;
+        }
 
-    
-      const userRef = doc(db, 'user', user.uid); 
-      await setDoc(userRef, {
-        name,
-        email,
-        address,
-        contactNumber,
-        age,
-        gender,
-        car,
-        carPlateNumber,
-        password,
-      });
+        // Check if car plate number already exists
+        const plateQuery = query(collection(db, "user"), where("carPlateNumber", "==", carPlateNumber));
+        const plateSnapshot = await getDocs(plateQuery);
+        if (!plateSnapshot.empty) {
+            Alert.alert("Error", "This car plate number is already registered.");
+            return;
+        }
 
-      console.log('Signup successful!');
-      Alert.alert('Success', 'Successfully registered!', [{ text: 'OK' }]);
-      navigation.navigate('Login');
+        // Create user with Firebase Authentication
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+
+        // Save user data to Firestore
+        const userRef = doc(db, "user", user.uid);
+        await setDoc(userRef, {
+            name,
+            email,
+            address,
+            contactNumber,
+            age,
+            gender,
+            car,
+            carPlateNumber,
+            password,
+        });
+
+        console.log("Signup successful!");
+        Alert.alert("Success", "Successfully registered!", [{ text: "OK" }]);
+        navigation.navigate("Login");
     } catch (error) {
-      console.error('Error signing up: ', error);
-      Alert.alert('Error', 'Registration failed. Please try again.', [{ text: 'OK' }]);
+        console.error("Error signing up: ", error);
+        Alert.alert("Error", "Registration failed. Please try again.", [{ text: "OK" }]);
     }
 };
 
@@ -146,7 +185,7 @@ const styles = StyleSheet.create({
 
   },
   title: {
-    fontSize: 50,
+    fontSize: 30,
     fontWeight: 'bold',
     color: 'white', // Darker font for better readability
     alignSelf: 'center', // Center the title 
